@@ -67,6 +67,7 @@ jobs:
           ./gradlew assembleRelease -PHERMES_URL="${HERMES_URL:-https://CHANGE-ME.example.com}"
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: hermes-mobile-apk
           path: app/build/outputs/apk/release/app-release.apk
