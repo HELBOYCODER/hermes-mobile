@@ -16,9 +16,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-      - uses: android-actions/setup-android@v3
-      - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android SDK
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: |
+          export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin"
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.10' }
 
