@@ -6,7 +6,7 @@
 #   app/src/main/jniLibs/arm64-v8a/libproot-loader.so   PRoot ELF loader (64-bit)
 #   app/src/main/jniLibs/arm64-v8a/libproot-loader32.so PRoot ELF loader (32-bit, optional)
 #   app/src/main/jniLibs/arm64-v8a/libtalloc.so         talloc, proot's only dependency
-#   app/src/main/assets/sandbox/alpine-rootfs.tar.gz    Alpine Linux aarch64 minirootfs
+#   app/src/main/assets/sandbox/alpine-rootfs.bin    Alpine Linux aarch64 minirootfs
 #
 # Why jniLibs: Android 10+ forbids executing anything under the app's data dir
 # (W^X for untrusted_app). Only files the installer extracts into
@@ -38,7 +38,7 @@ mkdir -p "$JNI" "$ASSETS" "$WORK"
 
 if [ -f "$JNI/libproot.so" ] && [ -f "$JNI/libproot-loader.so" ] && [ -f "$JNI/libtalloc.so" ] \
    && [ -f "$JNI/libandroid-shmem.so" ] \
-   && [ -f "$ASSETS/alpine-rootfs.tar.gz" ] && [ "${FORCE:-0}" != "1" ]; then
+   && [ -f "$ASSETS/alpine-rootfs.bin" ] && [ "${FORCE:-0}" != "1" ]; then
   echo "sandbox payload already present (FORCE=1 to refetch)"
   exit 0
 fi
@@ -100,7 +100,7 @@ for so in libproot.so libtalloc.so libandroid-shmem.so; do
 done
 
 echo "==> Downloading Alpine $ALPINE_RELEASE aarch64 minirootfs"
-curl -fsSL "$ALPINE_URL" -o "$ASSETS/alpine-rootfs.tar.gz"
+curl -fsSL "$ALPINE_URL" -o "$ASSETS/alpine-rootfs.bin"
 echo "$ALPINE_RELEASE" > "$ASSETS/VERSION"
 
 ls -l "$JNI" "$ASSETS"

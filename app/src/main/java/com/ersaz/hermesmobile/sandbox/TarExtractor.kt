@@ -12,7 +12,18 @@ import java.util.zip.GZIPInputStream
  */
 object TarExtractor {
 
-    fun extract(input: InputStream, dest: File, onEntry: (String) -> Unit = {}) {
+    /** Filesystem primitives; swapped out in JVM unit tests where android.system.Os is unavailable. */
+    interface Fs {
+        fun symlink(target: String, path: String)
+        fun chmod(path: String, mode: Int)
+    }
+
+    val androidFs = object : Fs {
+        override fun symlink(target: String, path: String) = Os.symlink(target, path)
+        override fun chmod(path: String, mode: Int) = Os.chmod(path, mode)
+    }
+
+    fun extract(input: InputStream, dest: File, fs: Fs = androidFs, onEntry: (String) -> Unit = {}) {
         dest.mkdirs()
         val destCanon = dest.canonicalPath
         GZIPInputStream(input.buffered(1 shl 16)).use { gz ->
@@ -55,18 +66,18 @@ object TarExtractor {
                 }
                 onEntry(rel)
                 when (type) {
-                    '5' -> { out.mkdirs(); chmod(out, mode or 0b111_000_000) }
+                    '5' -> { out.mkdirs(); chmod(fs, out, mode or 0b111_000_000) }
                     '2' -> {
                         out.parentFile?.mkdirs()
                         out.delete()
-                        try { Os.symlink(link, out.absolutePath) } catch (_: Exception) {}
+                        try { fs.symlink(link, out.absolutePath) } catch (_: Exception) {}
                     }
                     '1' -> deferredLinks += out to link.removePrefix("./")
                     '0', '\u0000', '7' -> {
                         out.parentFile?.mkdirs()
                         out.delete()
                         out.outputStream().use { os -> copyN(gz, os, size) }
-                        chmod(out, mode)
+                        chmod(fs, out, mode)
                         skipPadding(gz, size)
                         continue
                     }
@@ -77,7 +88,7 @@ object TarExtractor {
             for ((file, target) in deferredLinks) {
                 file.parentFile?.mkdirs()
                 file.delete()
-                try { Os.symlink("/$target", file.absolutePath) } catch (_: Exception) {}
+                try { fs.symlink("/$target", file.absolutePath) } catch (_: Exception) {}
             }
         }
     }
@@ -92,8 +103,8 @@ object TarExtractor {
         return m
     }
 
-    private fun chmod(f: File, mode: Int) {
-        try { Os.chmod(f.absolutePath, mode and 0b111_111_111) } catch (_: Exception) {}
+    private fun chmod(fs: Fs, f: File, mode: Int) {
+        try { fs.chmod(f.absolutePath, mode and 0b111_111_111) } catch (_: Exception) {}
     }
 
     private fun cstr(b: ByteArray, off: Int, len: Int): String {

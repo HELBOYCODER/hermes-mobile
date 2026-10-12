@@ -41,8 +41,9 @@ android {
         resources { excludes += ['/META-INF/{AL2.0,LGPL2.1}'] }
     }
     androidResources {
-        // Keep the rootfs tarball as-is (already gzip'ed).
-        noCompress += ['tar.gz', 'gz']
+        // Keep the rootfs tarball as-is (already gzip'ed). It is named .bin because aapt
+        // silently gunzips assets ending in .gz, which would break the lookup at runtime.
+        noCompress += ['bin', 'tar.gz', 'gz']
     }
 
     signingConfigs {
@@ -66,10 +67,10 @@ android {
 tasks.register('checkSandboxPayload') {
     doLast {
         def jni = file('src/main/jniLibs/arm64-v8a')
-        def rootfs = file('src/main/assets/sandbox/alpine-rootfs.tar.gz')
+        def rootfs = file('src/main/assets/sandbox/alpine-rootfs.bin')
         def missing = ['libproot.so', 'libproot-loader.so', 'libtalloc.so', 'libandroid-shmem.so']
                 .findAll { !new File(jni, it).exists() }
-        if (!rootfs.exists()) missing << 'assets/sandbox/alpine-rootfs.tar.gz'
+        if (!rootfs.exists()) missing << 'assets/sandbox/alpine-rootfs.bin'
         if (!missing.isEmpty()) {
             throw new GradleException("Sandbox payload missing: ${missing}. Run ./scripts/fetch_sandbox.sh first.")
         }
@@ -100,4 +101,6 @@ dependencies {
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
 }

@@ -79,6 +79,14 @@ class Sandbox(private val context: Context, private val settings: Settings) {
             }
             try {
                 _state.value = State.Installing("Extracting Alpine Linux…")
+                // HERMES_HOME (/root/.hermes: sessions, memory, skills, cron) lives inside the rootfs —
+                // move it aside so a fresh install or "Reinstall rootfs" never destroys user data.
+                val home = File(rootfs, "root/.hermes")
+                val kept = File(baseDir, ".hermes_keep")
+                // A leftover .hermes_keep means a previous install died mid-way: it IS the user's data, keep it.
+                if (!kept.exists() && home.exists() && !home.renameTo(kept)) {
+                    home.copyRecursively(kept, overwrite = true)
+                }
                 rootfs.deleteRecursively()
                 rootfs.mkdirs()
                 var count = 0
@@ -86,6 +94,11 @@ class Sandbox(private val context: Context, private val settings: Settings) {
                     TarExtractor.extract(input, rootfs) {
                         if (++count % 50 == 0) _state.value = State.Installing("Extracting… $count files")
                     }
+                }
+                if (kept.exists()) {
+                    home.deleteRecursively()
+                    home.parentFile?.mkdirs()
+                    if (!kept.renameTo(home)) { kept.copyRecursively(home, overwrite = true); kept.deleteRecursively() }
                 }
                 postInstall()
                 marker.writeText(System.currentTimeMillis().toString())
@@ -240,7 +253,7 @@ class Sandbox(private val context: Context, private val settings: Settings) {
     }
 
     companion object {
-        const val ROOTFS_ASSET = "sandbox/alpine-rootfs.tar.gz"
+        const val ROOTFS_ASSET = "sandbox/alpine-rootfs.bin"
         const val CWD_MARK = "__HERMES_CWD__"
         const val BRIDGE_PORT_FILE = "root/.hermes/.bridge_port"
         const val BRIDGE_TOKEN_FILE = "root/.hermes/.bridge_token"

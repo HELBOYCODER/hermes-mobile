@@ -4,6 +4,7 @@ on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -24,9 +25,11 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
-        with: { gradle-version: '8.10' }
 
-      - run: gradle wrapper --gradle-version 8.10
+      - name: Fetch sandbox payload (PRoot + Alpine rootfs)
+        run: |
+          pip install --quiet patchelf
+          ./scripts/fetch_sandbox.sh
 
       - name: Decode keystore
         env:
@@ -64,7 +67,7 @@ jobs:
           HERMES_URL: ${{ secrets.HERMES_URL }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease -PHERMES_URL="${HERMES_URL:-https://CHANGE-ME.example.com}"
+          ./gradlew testDebugUnitTest assembleRelease -PHERMES_URL="${HERMES_URL:-}"
 
       - uses: actions/upload-artifact@v4
         continue-on-error: true
