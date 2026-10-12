@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Caduceus-style mark: gold staff with two bronze wings on deep navy. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#1A1A2E" android:pathData="M0,0h108v108h-108z"/>
+    <path android:fillColor="#FFD700" android:pathData="M51,24h6v62h-6z"/>
+    <path android:fillColor="#FFD700" android:pathData="M54,18m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"/>
+    <path android:fillColor="#CD7F32" android:pathData="M50,32C40,26 28,26 18,32C28,32 38,36 50,40Z"/>
+    <path android:fillColor="#CD7F32" android:pathData="M58,32C68,26 80,26 90,32C80,32 70,36 58,40Z"/>
+    <path android:strokeColor="#FFBF00" android:strokeWidth="3.5" android:fillColor="#00000000"
+        android:pathData="M64,44C44,50 44,58 54,62C64,66 64,74 44,80"/>
+    <path android:strokeColor="#FFBF00" android:strokeWidth="3.5" android:fillColor="#00000000"
+        android:pathData="M44,44C64,50 64,58 54,62C44,66 44,74 64,80"/>
+</vector>

@@ -1,14 +1,13 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+// Optional default for the remote Hermes WebUI tab; can be changed in Settings at runtime.
 def hermesUrl = (project.findProperty('HERMES_URL')
         ?: System.getenv('HERMES_URL')
-        ?: 'https://CHANGE-ME.example.com').toString().trim()
-if (hermesUrl.isEmpty()) {
-    hermesUrl = 'https://CHANGE-ME.example.com'
-}
+        ?: '').toString().trim()
 
 android {
     namespace 'com.ersaz.hermesmobile'
@@ -18,11 +17,16 @@ android {
         applicationId "com.ersaz.hermesmobile"
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "2.0"
         buildConfigField "String", "HERMES_URL", "\"${hermesUrl}\""
+        // The sandbox (PRoot + Alpine) payload is aarch64 only.
+        ndk { abiFilters 'arm64-v8a' }
     }
-    buildFeatures { buildConfig true }
+    buildFeatures {
+        buildConfig true
+        compose true
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -30,9 +34,21 @@ android {
     }
     kotlinOptions { jvmTarget = '17' }
 
+    packaging {
+        // proot + its loader ship as lib*.so and must be extracted to nativeLibraryDir,
+        // the only place an Android 10+ app may exec() from.
+        jniLibs { useLegacyPackaging = true }
+        resources { excludes += ['/META-INF/{AL2.0,LGPL2.1}'] }
+    }
+    androidResources {
+        // Keep the rootfs tarball as-is (already gzip'ed).
+        noCompress += ['tar.gz', 'gz']
+    }
+
     signingConfigs {
         release {
-            storeFile file(System.getenv("KEYSTORE_PATH") ?: "debug.keystore")
+            def ks = System.getenv("KEYSTORE_PATH")
+            storeFile ks ? file(ks) : file("${System.getProperty('user.home')}/.android/debug.keystore")
             storePassword System.getenv("KEYSTORE_PASSWORD") ?: "android"
             keyAlias System.getenv("KEY_ALIAS") ?: "androiddebugkey"
             keyPassword System.getenv("KEY_PASSWORD") ?: "android"
@@ -46,7 +62,42 @@ android {
     }
 }
 
+// Fail early with a clear message instead of shipping an APK whose terminal can't start.
+tasks.register('checkSandboxPayload') {
+    doLast {
+        def jni = file('src/main/jniLibs/arm64-v8a')
+        def rootfs = file('src/main/assets/sandbox/alpine-rootfs.tar.gz')
+        def missing = ['libproot.so', 'libproot-loader.so', 'libtalloc.so', 'libandroid-shmem.so']
+                .findAll { !new File(jni, it).exists() }
+        if (!rootfs.exists()) missing << 'assets/sandbox/alpine-rootfs.tar.gz'
+        if (!missing.isEmpty()) {
+            throw new GradleException("Sandbox payload missing: ${missing}. Run ./scripts/fetch_sandbox.sh first.")
+        }
+    }
+}
+preBuild.dependsOn checkSandboxPayload
+
 dependencies {
+    def composeBom = platform('androidx.compose:compose-bom:2024.10.01')
+    implementation composeBom
+
     implementation 'androidx.core:core-ktx:1.13.1'
-    implementation 'androidx.activity:activity-ktx:1.9.2'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // Real PTY terminal emulator (same widget Termux uses), driving our PRoot sandbox.
+    implementation 'com.github.termux.termux-app:terminal-view:v0.118.1'
+    implementation 'com.github.termux.termux-app:terminal-emulator:v0.118.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }
