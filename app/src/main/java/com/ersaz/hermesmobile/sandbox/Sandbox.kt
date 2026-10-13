@@ -178,6 +178,7 @@ class Sandbox(private val context: Context, private val settings: Settings) {
             "HERMES_HOME" to "/root/.hermes",
             "SHELL" to "/bin/sh",
         )
+        env.putAll(settings.envVars())
         env.putAll(extraEnv)
         env.forEach { (k, v) -> argv += "$k=$v" }
         argv += guestArgv

@@ -54,7 +54,15 @@ class McpManager(private val rt: HermesRuntime) {
     fun servers(): List<McpServer> = store.all()
     fun statusOf(id: String): McpStatus? = _status.value[id]
 
-    private fun setStatus(id: String, s: McpStatus) { _status.value = _status.value + (id to s); _tick.value++ }
+    private fun setStatus(id: String, s: McpStatus) {
+        _status.value = _status.value + (id to s); _tick.value++
+        when (s) {
+            is McpStatus.Failed -> rt.log.e("mcp", "$id: ${s.message}")
+            is McpStatus.NeedsAuth -> rt.log.i("mcp", "$id needs sign-in: ${s.message}")
+            is McpStatus.Connected -> rt.log.i("mcp", "$id connected (${s.tools} tools)")
+            else -> {}
+        }
+    }
 
     // ---------------------------------------------------------------- adding
 

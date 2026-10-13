@@ -70,6 +70,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     /** The Bot Mode profile this chat talks to; null = the default Hermes. */
     var activeBot by mutableStateOf<Bot?>(null); private set
     val pendingImages = mutableStateListOf<String>()
+    /** Messages waiting for the current turn to finish (busy mode = queue). */
+    val queued = mutableStateListOf<String>()
+    var listening by mutableStateOf(false); private set
     private var job: Job? = null
     private var seq = 0
     private fun k() = "i${seq++}"
@@ -85,6 +88,28 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         if (busy) { pendingBackground += text; return }
         items += ChatItem.Info(k(), "🔀 " + text.lineSequence().first())
         runTurn(text, emptyList(), showUser = false)
+    }
+
+    private fun flushQueue() {
+        if (queued.isEmpty() || busy) return
+        val joined = queued.joinToString("\n\n"); queued.clear()
+        runTurn(joined, emptyList(), showUser = true)
+    }
+
+    // ---- voice input ----
+    fun toggleDictation() {
+        val d = runtime.dictation
+        if (listening) { d.finish(); return }
+        viewModelScope.launch {
+            if (!runtime.permissions.ensure(android.Manifest.permission.RECORD_AUDIO)) { items += ChatItem.Info(k(), "Microphone permission is needed for voice input.", isError = true); return@launch }
+            if (!d.available()) { items += ChatItem.Info(k(), "No speech recognizer is available on this phone.", isError = true); return@launch }
+            val base = input.trimEnd()
+            listening = true
+            d.start(runtime.settings.voiceLang,
+                onPartial = { p -> input = (base + " " + p).trim() },
+                onFinal = { f -> listening = false; if (f.isNotBlank()) input = (base + " " + f).trim() },
+                onError = { e -> listening = false; if (!e.startsWith("Didn't")) items += ChatItem.Info(k(), e, isError = true) })
+        }
     }
 
     private fun flushBackground() {
@@ -241,6 +266,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 }
                 return@launch
             }
+            if (busy && runtime.settings.busyMode == "queue" && images.isEmpty()) { queued += text; return@launch }
             if (busy) {
                 // Hermes "busy" default: a new message interrupts the running turn.
                 agent.interrupt(); job?.join()
@@ -299,7 +325,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
             } catch (e: Exception) {
                 ui { items += ChatItem.Info(k(), "⚠️ ${e.message}", isError = true) }
             } finally {
-                ui { busy = false; current?.streaming = false; refreshMeta(); flushBackground() }
+                ui { busy = false; current?.streaming = false; refreshMeta(); flushQueue(); flushBackground() }
             }
         }
     }

@@ -22,13 +22,19 @@ Not affiliated with Nous Research. Open source, no Play Store, no analytics SDKs
 | Cron scheduler: `30m`, `every 2h`, `0 9 * * *`, ISO time; delivered to a notification or any chat | ✅ |
 | **Bot Mode** (port of [Hermes Bot Mode](https://github.com/NousResearch/Hermes-Bot-Mode)): a roster of named bots, each a Hermes profile with its own chat, avatar, SOUL, memory, model pin, toolsets and routines. Groups and group chats, bot-to-bot messaging, `@mention` hand-offs, Active-now strip, duplicate/delete | ✅ |
 | **Messaging gateway**: Telegram, Discord, Slack (Socket Mode). Per-chat sessions, DM pairing codes, allowlists, home channels (`/sethome`), tool-progress messages, file and voice delivery | ✅ |
+| **MCP servers**: paste a URL, `npx …` command or Claude-Desktop JSON — Hermes connects, detects a login requirement (401), discovers the OAuth server, registers itself and opens the sign-in page, then exposes the tools as `mcp__server__tool`. Streamable HTTP, legacy SSE and sandboxed stdio (auto-installs node/uv). `/mcp` command | ✅ |
+| **Sub-agents**: a roster the main model delegates to on its own (3 run at once, extras queue), background results arrive as new messages, `status`/`steer`/`cancel`/`resume`, per-agent model pin or Auto (`same_as_me` / `default_model` / `sub_model`) | ✅ |
+| **Browser automation**: real WebView tabs the agent drives by numbered snapshots (click/type/scroll/screenshot/cookies/JS), shown on screen with a login/CAPTCHA hand-over | ✅ |
+| Phone tools: calendar, alarms/timers, contacts, location, dialer, app launcher, share file, flashlight, volume, weather | ✅ |
+| Voice input (dictation) and read-aloud, queue-while-busy mode, tool-loop detector, markdown images/tables/links, file browser, usage stats, env vars, apk mirrors, backup/restore, in-app logs, text size | ✅ |
+| **ThinkingOrbs**: animated, mode-aware thinking indicator (thinking / tool / writing / waiting / error) | ✅ |
 | **Sign in with Nous Portal** (device-code OAuth, no API key) with automatic model selection: subscribers get the full catalog, free accounts get the free models | ✅ |
 | ~40 slash commands shared by the app, the CLI and the bots (`/help` lists them) | ✅ |
 | 14 personalities (`/personality`), 9 skins with their palettes, spinner faces and branding (`/skin`) | ✅ |
 | Providers: Nous Portal, OpenRouter, OpenAI, Anthropic, Gemini, xAI, DeepSeek, Groq, Mistral, Ollama/LM Studio, any OpenAI-compatible URL | ✅ |
 | Image input (vision), share-to-Hermes from other apps | ✅ |
 | Original remote **WebUI** mode (WebView), now with working file uploads | ✅ |
-| WhatsApp, Signal and Email gateways; voice transcription; Docker/SSH/Modal backends; MCP servers | ❌ not ported. They need bridges or daemons that don't fit on a phone. |
+| Accessibility-service screen control, Shizuku, Health Connect, notification-listener, iCloud-style sync, Dynamic Island; WhatsApp, Signal and Email gateways; voice transcription; Docker/SSH/Modal backends; MCP servers | ❌ not ported. They need bridges or daemons that don't fit on a phone. |
 
 ## How the sandbox works
 

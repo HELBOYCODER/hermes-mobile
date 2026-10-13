@@ -86,6 +86,8 @@ class Agent(
             var finalText = ""
             var iteration = 0
             val maxIter = settings.maxIterations.coerceIn(1, 500)
+            val loopDetector = ToolLoopDetector()
+            var loopStop = false
 
             while (true) {
                 if (interrupted) { finalText = finalText.ifBlank { "⏹ Interrupted." }; break }
@@ -145,11 +147,21 @@ class Agent(
                     } catch (e: Exception) {
                         "{\"error\":\"${(e.message ?: e.toString()).replace("\"", "'")}\"}"
                     }
-                    val capped = com.ersaz.hermesmobile.core.truncateMiddle(result, 60_000)
+                    var capped = com.ersaz.hermesmobile.core.truncateMiddle(result, 60_000)
+                    when (loopDetector.record(call.name, call.arguments, capped)) {
+                        ToolLoopDetector.Verdict.WARN -> capped += loopDetector.nudge(call.name)
+                        ToolLoopDetector.Verdict.STOP -> loopStop = true
+                        else -> {}
+                    }
                     listener.onToolEnd(call, capped, System.currentTimeMillis() - started)
                     session.messages += Message("tool", capped, toolCallId = call.id, name = call.name)
                 }
                 runtime.sessions.save(session)
+                if (loopStop) {
+                    finalText = "⚠️ Stopped: I kept repeating the same `${r.toolCalls.last().name}` call with the same result. Tell me how you'd like to proceed."
+                    session.messages += Message("assistant", finalText)
+                    break
+                }
             }
             runtime.sessions.save(session)
             if (session.title.isBlank()) runtime.titleSessionAsync(session)
@@ -170,6 +182,7 @@ class Agent(
         u ?: return
         session.promptTokens += u.promptTokens
         session.completionTokens += u.completionTokens
+        runtime.usage.record(model(), u.promptTokens, u.completionTokens)
         session.lastPromptTokens = u.promptTokens
     }
 

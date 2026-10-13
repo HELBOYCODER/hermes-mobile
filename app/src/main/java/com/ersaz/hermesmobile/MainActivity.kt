@@ -24,6 +24,9 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Language
@@ -74,6 +77,9 @@ import com.ersaz.hermesmobile.ui.SettingsScreen
 import com.ersaz.hermesmobile.ui.SkillsScreen
 import com.ersaz.hermesmobile.ui.SubAgentsScreen
 import com.ersaz.hermesmobile.ui.TerminalScreen
+import com.ersaz.hermesmobile.ui.UsageScreen
+import com.ersaz.hermesmobile.ui.FilesScreen
+import com.ersaz.hermesmobile.ui.LogsScreen
 import com.ersaz.hermesmobile.ui.WebUiScreen
 import com.ersaz.hermesmobile.ui.imageDataUri
 import com.ersaz.hermesmobile.ui.theme.HermesTheme
@@ -93,6 +99,9 @@ enum class Dest(val title: String, val icon: ImageVector) {
     Mcp("MCP servers", Icons.Default.Extension),
     Gateway("Messaging gateway", Icons.Default.Hub),
     WebUi("Remote WebUI", Icons.Default.Language),
+    Files("Files", Icons.Default.Folder),
+    Usage("Usage stats", Icons.Default.BarChart),
+    Logs("Logs", Icons.Default.BugReport),
     Settings("Settings", Icons.Default.Settings),
 }
 
@@ -118,7 +127,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             val version by rt.settings.version.collectAsState()
             val skin = remember(version) { Skins.byName(rt.settings.skin) }
-            HermesTheme(skin) {
+            val fs = remember(version) { rt.settings.fontScaleValue() }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale * fs),
+            ) { HermesTheme(skin) {
                 var dest by rememberSaveable { mutableStateOf(Dest.Chat) }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -189,12 +202,15 @@ class MainActivity : ComponentActivity() {
                                 Dest.Mcp -> McpScreen(rt)
                                 Dest.Gateway -> GatewayScreen(rt)
                                 Dest.WebUi -> WebUiScreen(rt)
+                                Dest.Files -> FilesScreen(rt)
+                                Dest.Usage -> UsageScreen(rt)
+                                Dest.Logs -> LogsScreen(rt)
                                 Dest.Settings -> SettingsScreen(rt)
                             }
                         }
                     }
                 }
-            }
+            } }
         }
     }
 

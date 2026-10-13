@@ -126,12 +126,48 @@ fun SettingsScreen(rt: HermesRuntime) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { scope.launch { rt.sandbox.reinstall() } }) { Text("Reinstall rootfs") }
         }
+        var mirrorMsg by remember { mutableStateOf("") }
+        Picker("Package mirror (apk)", APK_MIRRORS, s.apkMirror) { s.apkMirror = it; refresh++; scope.launch { mirrorMsg = applyApkMirror(rt, it) } }
+        if (mirrorMsg.isNotBlank()) Text(mirrorMsg, color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         Text("Rootfs: ${rt.sandbox.rootfs.absolutePath}", color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+
+        SectionTitle("🎨 Appearance & input")
+        Picker("Text size", listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Extra large"), s.fontScale) { s.fontScale = it; refresh++ }
+        Picker("When I send while Hermes is working", listOf("interrupt" to "Interrupt and answer me now", "queue" to "Queue it for after the current task"), s.busyMode) { s.busyMode = it; refresh++ }
+        Field("Voice input language (BCP-47, e.g. fa-IR, en-US; blank = device)", s.voiceLang) { s.voiceLang = it.trim() }
+
+        SectionTitle("🔑 Sandbox environment variables")
+        Hint("Exported inside the Linux sandbox for every command — API keys for your scripts and tools. One KEY=VALUE per line.")
+        Field("Variables", s.sandboxEnv, singleLine = false) { s.sandboxEnv = it }
+
+        SectionTitle("💾 Backup & restore")
+        Hint("Saves sessions, memory, skills, bots, MCP servers, schedules and settings to one .zip file. API keys and sign-in tokens are left out unless you include them.")
+        var includeSecrets by remember { mutableStateOf(false) }
+        var backupMsg by remember { mutableStateOf("") }
+        Toggle("Include API keys & tokens", includeSecrets, "Anyone with the file can use them — keep it private") { includeSecrets = it }
+        val backupSaver = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            if (uri != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                backupMsg = try { ctx.contentResolver.openOutputStream(uri)!!.use { rt.backup.export(it, includeSecrets) }.let { "Saved backup ($it files)." } } catch (e: Exception) { "Backup failed: ${e.message}" }
+            }
+        }
+        val backupLoader = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                backupMsg = try { ctx.contentResolver.openInputStream(uri)!!.use { rt.backup.import(it) }.let { "Restored $it files. Restart the app to apply everything." } } catch (e: Exception) { "Restore failed: ${e.message}" }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { backupSaver.launch("hermes-backup-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())}.zip") }) { Text("Back up…") }
+            OutlinedButton(onClick = { backupLoader.launch(arrayOf("application/zip", "application/octet-stream")) }) { Text("Restore…") }
+        }
+        if (backupMsg.isNotBlank()) Text(backupMsg, color = skin.dim, fontSize = 12.sp)
 
         SectionTitle("🌐 Remote Hermes WebUI")
         Hint("Optional: the original WebView mode for a self-hosted Hermes WebUI (LAN, Tailscale, or public URL).")
         Field("WebUI URL", s.webUiUrl.ifBlank { BuildConfig.HERMES_URL }) { s.webUiUrl = it.trim() }
 
+        var updateMsg by remember { mutableStateOf("") }
+        OutlinedButton(onClick = { updateMsg = "Checking…"; scope.launch { updateMsg = checkForUpdate(rt) } }) { Text("Check for updates") }
+        if (updateMsg.isNotBlank()) Text(updateMsg, color = skin.dim, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
         Text("Hermes Agent for Android ${HermesRuntime.VERSION}\nPort of NousResearch/hermes-agent (MIT). Sandbox: Alpine Linux + PRoot.",
             color = skin.dim, fontSize = 11.sp)

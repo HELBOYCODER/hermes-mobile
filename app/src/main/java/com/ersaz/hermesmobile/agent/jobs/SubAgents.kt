@@ -216,6 +216,7 @@ class AgentJobs(private val rt: HermesRuntime) {
     private fun finish(job: AgentJob, state: JobState, result: String, wait: Boolean, parent: Agent) {
         if (job.state.finished) return
         job.state = state; job.result = result; job.finishedAt = System.currentTimeMillis(); job.currentTool = ""
+        rt.log.add(if (state == JobState.FAILED) 'E' else 'I', "agent", "${job.agentName} ${job.id} ${state.name.lowercase()} after ${job.elapsedSec}s")
         persist(); _tick.value++
         job.done.complete(Unit)
         if (!wait) rt.scope.launch(Dispatchers.IO) { postBack(job) }

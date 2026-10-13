@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -105,6 +106,12 @@ fun ChatScreen(vm: ChatViewModel) {
             }
         }
 
+        if (vm.queued.isNotEmpty()) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("⏳ ${vm.queued.size} queued: ${vm.queued.last().take(40)}", color = skin.label, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                IconButton(onClick = { vm.queued.clear() }) { Icon(Icons.Default.Close, "clear queue", tint = skin.dim) }
+            }
+        }
         if (vm.pendingImages.isNotEmpty()) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🖼️ ${vm.pendingImages.size} image(s) attached", color = skin.label, fontSize = 13.sp)
@@ -115,6 +122,9 @@ fun ChatScreen(vm: ChatViewModel) {
         HorizontalDivider(color = skin.border.copy(alpha = 0.6f))
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.Bottom) {
             IconButton(onClick = { picker.launch("image/*") }) { Icon(Icons.Default.AddPhotoAlternate, "attach image", tint = skin.label) }
+            IconButton(onClick = { vm.toggleDictation() }) {
+                if (vm.listening) ThinkingOrbs(OrbMode.Writing, 30.dp) else Icon(Icons.Default.Mic, "voice input", tint = skin.label)
+            }
             OutlinedTextField(
                 value = vm.input,
                 onValueChange = { vm.input = it },
@@ -225,6 +235,14 @@ private fun ChatRow(item: ChatItem) {
                     .padding(10.dp).animateContentSize()) {
                     MarkdownText(item.text + if (item.streaming) " ▌" else "")
                 }
+                if (!item.streaming && item.text.length > 1) {
+                    val rt = com.ersaz.hermesmobile.HermesRuntime.get(LocalContext.current)
+                    val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+                    Row {
+                        Text("🔊 read", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { rt.speech.speak(com.ersaz.hermesmobile.ui.plainSpeech(item.text)) }.padding(end = 14.dp, top = 4.dp))
+                        Text("⧉ copy", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { clip.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }.padding(top = 4.dp))
+                    }
+                }
             }
         }
         is ChatItem.Tool -> {
@@ -296,3 +314,11 @@ fun imageDataUri(context: android.content.Context, uri: Uri): String? = runCatch
     scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
     "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
 }.getOrNull()
+
+/** Strip markdown noise so text-to-speech doesn't read symbols aloud. */
+fun plainSpeech(md: String): String = md
+    .replace(Regex("```[\\s\\S]*?```"), " code block. ")
+    .replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "")
+    .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
+    .replace(Regex("[*_`#>|~]+"), " ")
+    .replace(Regex("\\s+"), " ").trim()
