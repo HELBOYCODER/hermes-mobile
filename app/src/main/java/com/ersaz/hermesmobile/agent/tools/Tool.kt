@@ -70,6 +70,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         Toolset("vision", "Analyze images"),
         Toolset("device", "Android phone features (clipboard, notifications, URLs, battery)"),
         Toolset("bots", "Bot Mode: hand work to other bots in your roster (@mentions)"),
+        Toolset("mcp", "Tools from connected MCP servers"),
     )
 
     val all: List<Tool> by lazy {
@@ -92,13 +93,13 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         )
     }
 
-    fun byName(name: String) = all.firstOrNull { it.name == name }
+    fun byName(name: String) = all.firstOrNull { it.name == name } ?: runtime.mcp.tools().firstOrNull { it.name == name }
 
     fun available(enabledToolsets: Set<String>?, depth: Int, botDisabledToolsets: Set<String> = emptySet()): List<Tool> {
         val s = runtime.settings
         val disabledSets = s.disabledToolsetSet()
         val disabledTools = s.disabledToolSet()
-        return all.filter { t ->
+        return (all + runtime.mcp.tools()).filter { t ->
             val setOk = (enabledToolsets?.contains(t.toolset) ?: (t.toolset !in disabledSets)) && t.toolset !in botDisabledToolsets
             val subagentBlocked = depth > 0 && t.name in setOf("delegate_task", "clarify", "memory", "send_message", "cronjob", "message_bot")
             setOk && t.name !in disabledTools && !subagentBlocked &&

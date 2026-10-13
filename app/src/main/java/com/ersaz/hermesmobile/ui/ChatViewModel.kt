@@ -120,6 +120,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     override fun isBusy() = busy
 
+    /** Orb choreography derived from what the agent is doing right now. */
+    fun orbMode(): OrbMode {
+        if (approval != null || clarify != null) return OrbMode.Waiting
+        return when (val last = items.lastOrNull()) {
+            is ChatItem.Tool -> if (last.result == null) OrbMode.Tool else OrbMode.Thinking
+            is ChatItem.Assistant -> if (last.streaming && last.text.isNotEmpty()) OrbMode.Writing else OrbMode.Thinking
+            is ChatItem.Info -> if (last.isError) OrbMode.Error else OrbMode.Thinking
+            else -> OrbMode.Thinking
+        }
+    }
+
+    /** Caption under the orbs: the running tool and its argument preview. */
+    fun orbDetail(): String = (items.lastOrNull() as? ChatItem.Tool)?.takeIf { it.result == null }
+        ?.let { "${it.emoji} ${it.name}" + if (it.preview.isNotBlank()) " · ${it.preview.take(48)}" else "" }.orEmpty()
+
     override fun newSession(): Agent {
         stop()
         val bot = activeBot ?: runtime.bots.get(Bot.DEFAULT_ID)!!

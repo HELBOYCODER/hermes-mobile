@@ -131,6 +131,7 @@ private fun Roster(rt: HermesRuntime, open: (Bot) -> Unit, go: (String) -> Unit)
                     Row(Modifier.clip(RoundedCornerShape(20.dp)).background(skin.surface).clickable { open(e.bot) }.padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         BotAvatar(e.bot, 22.dp, working = e.running)
+                        if (e.running) ThinkingOrbs(OrbMode.Tool, 22.dp)
                         Text(" ${e.bot.name}", color = skin.text, fontSize = 13.sp)
                     }
                 }
@@ -464,7 +465,7 @@ private fun GroupRoomScreen(rt: HermesRuntime, group: String, back: () -> Unit) 
                     }
                 }
             }
-            if (busy) item { Text("${speaking?.let { byId[it]?.name } ?: "…"} is typing…", color = skin.dim, fontSize = 12.sp, modifier = Modifier.padding(8.dp)) }
+            if (busy) item { ThinkingIndicator(OrbMode.Writing, "${speaking?.let { byId[it]?.name } ?: "…"} is typing") }
         }
         HorizontalDivider(color = skin.border.copy(alpha = 0.4f))
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.Bottom) {

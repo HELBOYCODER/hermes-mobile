@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
@@ -62,6 +63,7 @@ import com.ersaz.hermesmobile.ui.ChatScreen
 import com.ersaz.hermesmobile.ui.ChatViewModel
 import com.ersaz.hermesmobile.ui.CronScreen
 import com.ersaz.hermesmobile.ui.GatewayScreen
+import com.ersaz.hermesmobile.ui.McpScreen
 import com.ersaz.hermesmobile.ui.MemoryScreen
 import com.ersaz.hermesmobile.ui.OnboardingScreen
 import com.ersaz.hermesmobile.ui.SessionsScreen
@@ -82,6 +84,7 @@ enum class Dest(val title: String, val icon: ImageVector) {
     Skills("Skills", Icons.Default.AutoStories),
     Memory("Memory", Icons.Default.Psychology),
     Cron("Scheduled tasks", Icons.Default.Schedule),
+    Mcp("MCP servers", Icons.Default.Extension),
     Gateway("Messaging gateway", Icons.Default.Hub),
     WebUi("Remote WebUI", Icons.Default.Language),
     Settings("Settings", Icons.Default.Settings),
@@ -165,6 +168,7 @@ class MainActivity : ComponentActivity() {
                                 Dest.Skills -> SkillsScreen(rt, vm) { dest = Dest.Chat }
                                 Dest.Memory -> MemoryScreen(rt)
                                 Dest.Cron -> CronScreen(rt)
+                                Dest.Mcp -> McpScreen(rt)
                                 Dest.Gateway -> GatewayScreen(rt)
                                 Dest.WebUi -> WebUiScreen(rt)
                                 Dest.Settings -> SettingsScreen(rt)

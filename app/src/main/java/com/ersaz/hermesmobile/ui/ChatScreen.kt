@@ -85,7 +85,7 @@ fun ChatScreen(vm: ChatViewModel) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
             if (vm.items.isEmpty()) item { Banner() }
             items(vm.items, key = { it.key }) { item -> ChatRow(item) }
-            if (vm.busy) item { Spinner() }
+            if (vm.busy) item { ThinkingIndicator(vm.orbMode(), vm.orbDetail()) }
         }
 
         if (vm.runtime.settings.showStatusBar) StatusBar(vm)
@@ -181,6 +181,7 @@ fun Banner() {
     val palette = listOf(skin.border, skin.border, skin.accent, skin.accent, skin.title, skin.title, skin.accent, skin.accent,
         skin.border, skin.border, skin.dim, skin.dim, skin.dim, skin.dim)
     Column(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        ThinkingOrbs(OrbMode.Idle, 96.dp)
         Skins.CADUCEUS.forEachIndexed { i, line ->
             Text(line, color = palette.getOrElse(i) { skin.dim }, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 12.sp)
         }
@@ -271,18 +272,6 @@ private fun DataImage(uri: String) {
     }
     if (bmp != null) Image(bmp, null, Modifier.size(200.dp).padding(bottom = 6.dp), contentScale = ContentScale.Crop)
     else Text("🖼️ image", color = Color.Gray)
-}
-
-@Composable
-private fun Spinner() {
-    val skin = LocalSkin.current
-    var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { while (true) { delay(700); tick++ } }
-    val face = skin.thinkingFaces[tick % skin.thinkingFaces.size]
-    val verb = skin.thinkingVerbs[(tick / 3) % skin.thinkingVerbs.size]
-    val wing = if (skin.wings.isNotEmpty()) skin.wings[tick % skin.wings.size] else null
-    Text((wing?.first?.plus(" ") ?: "") + "$face $verb…" + (wing?.second?.let { " $it" } ?: ""),
-        color = skin.accent, fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.padding(vertical = 10.dp))
 }
 
 @Composable

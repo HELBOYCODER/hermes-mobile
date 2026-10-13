@@ -80,6 +80,7 @@ class Agent(
             runtime.sessions.save(session)
 
             val client = runtime.llmClient().also { llm = it }
+            runtime.mcp.awaitReady() // MCP servers may still be connecting right after launch
             val toolList = tools()
             val toolSchemas = runtime.tools.schemas(toolList)
             var finalText = ""
@@ -326,9 +327,10 @@ object PromptBuilder {
 
     /** Per-call suffix that must not be frozen into the cached prompt (todo list state). */
     fun volatileSuffix(runtime: HermesRuntime, agent: Agent): String {
+        val mcp = runtime.mcp.promptBlock()?.let { "\n\n$it" }.orEmpty()
         val todos = agent.session.todos
-        if (todos.isEmpty()) return ""
-        return "\n\n## Current task list\n" + todos.joinToString("\n") { t ->
+        if (todos.isEmpty()) return mcp
+        return mcp + "\n\n## Current task list\n" + todos.joinToString("\n") { t ->
             val box = when (t.status) { "completed" -> "[x]"; "in_progress" -> "[>]"; "cancelled" -> "[-]"; else -> "[ ]" }
             "$box ${t.id}. ${t.content}"
         }

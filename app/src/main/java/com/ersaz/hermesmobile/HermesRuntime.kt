@@ -62,6 +62,7 @@ class HermesRuntime(val app: Application) {
     val cron = CronStore(File(hermesHome, "cron/jobs.json"))
     val bots = com.ersaz.hermesmobile.bots.BotStore(File(hermesHome, "bots"), memory)
     val botHub = com.ersaz.hermesmobile.bots.BotHub(this)
+    val mcp = com.ersaz.hermesmobile.mcp.McpManager(this)
     val tools = ToolRegistry(this)
     val speech = Speech(app, File(hermesHome, "audio"))
     val gateway = GatewayManager(this)
@@ -126,6 +127,11 @@ class HermesRuntime(val app: Application) {
     }
 
     private var notifId = 1000
+
+    /** Notification only when the user isn't looking at the app (e.g. after a browser sign-in). */
+    fun notifyIfBackground(title: String, text: String) {
+        if (!com.ersaz.hermesmobile.mcp.AppForeground.inForeground) notify(title, text)
+    }
 
     fun notify(title: String, text: String) {
         val intent = PendingIntent.getActivity(app, 0, Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),

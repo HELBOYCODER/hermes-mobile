@@ -52,7 +52,7 @@ fun NousLoginCard(rt: HermesRuntime) {
                 Text("Approve this sign-in in the browser. Code:", color = skin.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 Text(st.code.userCode, color = skin.accent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.padding(end = 4.dp), strokeWidth = 2.dp)
+                    ThinkingOrbs(OrbMode.Waiting, 34.dp)
                     Text("Waiting for approval…", color = skin.dim, fontSize = 12.sp)
                 }
                 Row {
@@ -62,7 +62,7 @@ fun NousLoginCard(rt: HermesRuntime) {
                 }
             }
             LoginState.Configuring -> Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.padding(end = 8.dp), strokeWidth = 2.dp)
+                ThinkingOrbs(OrbMode.Thinking, 34.dp)
                 Text("Signed in — checking which models your account can use…", color = skin.text, fontSize = 13.sp)
             }
             is LoginState.Connected -> {
