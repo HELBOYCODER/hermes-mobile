@@ -41,6 +41,7 @@ data class CommandDef(val name: String, val description: String, val category: S
 
 object Commands {
     val defs = listOf(
+        CommandDef("agents", "List sub-agent jobs; /agents cancel <id> stops one", "Tools", "[cancel <id>]"),
         CommandDef("mcp", "Manage MCP servers: list, add <url|command|json>, login/reconnect/enable/disable/remove <id>", "Tools", "[subcommand]"),
         CommandDef("new", "Start a new session (fresh history)", "Session", aliases = listOf("reset", "clear")),
         CommandDef("retry", "Retry the last message", "Session"),
@@ -324,6 +325,14 @@ object Commands {
                 "🧠 MEMORY.md (${mem.usage("memory")})\n" + mem.entries("memory").joinToString("\n") { "• $it" }.ifBlank { "(empty)" } +
                     "\n\n👤 USER.md (${mem.usage("user")})\n" + mem.entries("user").joinToString("\n") { "• $it" }.ifBlank { "(empty)" }
             ) }
+            "agents" -> {
+                val jobs = rt.agentJobs
+                if (arg.startsWith("cancel")) {
+                    val j = jobs.forSession(session.id).firstOrNull { it.id.startsWith(arg.removePrefix("cancel").trim()) }
+                    CommandResult.Reply(if (j == null) "No such job." else if (jobs.cancel(j)) "Cancelling ${j.id}…" else "Already finished.")
+                } else CommandResult.Reply(jobs.forSession(session.id).joinToString("\n") { "• ${it.id} ${it.agentName} — ${it.state.name.lowercase()} ${it.elapsedSec}s: ${it.task.take(60)}" }
+                    .ifBlank { "No sub-agent jobs in this conversation." })
+            }
             "mcp" -> mcp(arg, rt)
             "cron" -> cron(arg, host)
             "platforms" -> CommandResult.Reply(rt.gateway.statusText())

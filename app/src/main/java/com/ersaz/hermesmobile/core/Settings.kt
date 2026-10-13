@@ -76,6 +76,8 @@ class Settings(context: Context) : NousTokenStore {
     var reasoningEffort by str("reasoning_effort", "") // "", none, low, medium, high
     var showReasoning by bool("show_reasoning", true)
     var compressionThreshold by int("compression_threshold_pct", 50)
+    var subAgentsEnabled by bool("sub_agents_enabled", true)
+    var subModel by str("sub_model", "") // light model for sub-agents that pick model_choice=sub_model
 
     // --- Personality / display -------------------------------------------
     var personality by str("personality", "")

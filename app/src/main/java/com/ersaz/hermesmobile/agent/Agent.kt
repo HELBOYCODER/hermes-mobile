@@ -281,6 +281,7 @@ object PromptBuilder {
         "slack" to "You are replying through Slack. Use Slack-friendly formatting (*bold*, `code`), avoid markdown tables.",
         "terminal" to "You are replying to the `hermes` CLI inside the sandbox terminal; plain text renders best.",
         "cron" to "You are running a scheduled task unattended. Do the work and produce the final report; nobody can answer questions.",
+        "subagent" to "You are a sub-agent running unattended in the background. Work autonomously, don't ask questions, and finish with a concise report.",
         "bot" to "You are replying inside the Hermes app's Bot Mode. A message starting with \"Message from 🤖\" comes from another bot, not the user: answer it directly and concisely; your reply is returned to that bot automatically.",
     )
 
@@ -313,6 +314,7 @@ object PromptBuilder {
         if (s.memoryEnabled) agent.memory.promptBlock("memory")?.let { parts += it }
         if (s.userProfileEnabled) agent.memory.promptBlock("user")?.let { parts += it }
         if ("message_bot" in toolNames) runtime.botHub.rosterPrompt(agent)?.let { parts += it }
+        if ("delegate_task" in toolNames) runtime.agentJobs.roster()?.let { parts += it }
         if ("skill_view" in toolNames) runtime.skills.indexBlock()?.let { parts += it }
 
         // Project context files, like Hermes loading AGENTS.md from the working directory.

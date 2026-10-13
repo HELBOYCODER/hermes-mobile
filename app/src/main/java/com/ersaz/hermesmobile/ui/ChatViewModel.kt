@@ -74,7 +74,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     private var seq = 0
     private fun k() = "i${seq++}"
 
+    private val pendingBackground = mutableListOf<String>()
+    private var sinkSession: String? = null
+    private val jobSink = com.ersaz.hermesmobile.agent.jobs.AgentJobs.Sink { text -> ui { onBackgroundResult(text) } }
+
     init { rebuild() }
+
+    /** A sub-agent finished: show it and wake the main agent with the result (queued if it is mid-turn). */
+    private fun onBackgroundResult(text: String) {
+        if (busy) { pendingBackground += text; return }
+        items += ChatItem.Info(k(), "🔀 " + text.lineSequence().first())
+        runTurn(text, emptyList(), showUser = false)
+    }
+
+    private fun flushBackground() {
+        if (pendingBackground.isEmpty() || busy) return
+        val all = pendingBackground.joinToString("\n\n"); pendingBackground.clear()
+        onBackgroundResult(all)
+    }
 
     private fun latestAppSession(): Session {
         val latest = runtime.sessions.list().firstOrNull { it.source == "app" }
@@ -83,6 +100,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     /** Re-derive the visible transcript from the persisted session. */
     fun rebuild() {
+        sinkSession?.let { runtime.agentJobs.unregisterSink(it, jobSink) }
+        sinkSession = agent.session.id
+        runtime.agentJobs.registerSink(agent.session.id, jobSink)
         items.clear()
         val toolItems = mutableMapOf<String, ChatItem.Tool>()
         for (m in agent.session.messages) {
@@ -92,6 +112,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                         m.content.startsWith("[SYSTEM: The user invoked") -> "⚡ " + m.content.substringAfter("\"").substringBefore("\"") + " skill"
                         m.content.startsWith("[CONTEXT COMPACTION") -> null.also { items += ChatItem.Info(k(), "🗜️ Earlier turns were compressed") }
                         m.content.startsWith("[USER STEER") -> "🧭 " + m.content.substringAfter("]: ")
+                        m.content.startsWith("[Background task") -> null.also { items += ChatItem.Info(k(), "🔀 " + m.content.lineSequence().first()) }
                         m.content.startsWith("[SYSTEM:") -> null
                         else -> m.content
                     }
@@ -278,7 +299,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
             } catch (e: Exception) {
                 ui { items += ChatItem.Info(k(), "⚠️ ${e.message}", isError = true) }
             } finally {
-                ui { busy = false; current?.streaming = false; refreshMeta() }
+                ui { busy = false; current?.streaming = false; refreshMeta(); flushBackground() }
             }
         }
     }
