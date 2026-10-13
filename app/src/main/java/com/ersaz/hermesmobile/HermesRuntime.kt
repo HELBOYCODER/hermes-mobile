@@ -62,6 +62,8 @@ class HermesRuntime(val app: Application) {
     val cron = CronStore(File(hermesHome, "cron/jobs.json"))
     val bots = com.ersaz.hermesmobile.bots.BotStore(File(hermesHome, "bots"), memory)
     val botHub = com.ersaz.hermesmobile.bots.BotHub(this)
+    val permissions = com.ersaz.hermesmobile.device.Permissions(app)
+    val browser = com.ersaz.hermesmobile.browser.BrowserManager(this)
     val agentJobs = com.ersaz.hermesmobile.agent.jobs.AgentJobs(this)
     val mcp = com.ersaz.hermesmobile.mcp.McpManager(this)
     val tools = ToolRegistry(this)

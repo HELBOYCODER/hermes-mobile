@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ersaz.hermesmobile.ui.BotsScreen
+import com.ersaz.hermesmobile.ui.BrowserScreen
 import com.ersaz.hermesmobile.ui.ChatScreen
 import com.ersaz.hermesmobile.ui.ChatViewModel
 import com.ersaz.hermesmobile.ui.CronScreen
@@ -86,6 +88,7 @@ enum class Dest(val title: String, val icon: ImageVector) {
     Skills("Skills", Icons.Default.AutoStories),
     Memory("Memory", Icons.Default.Psychology),
     Cron("Scheduled tasks", Icons.Default.Schedule),
+    Browser("Browser", Icons.Default.Public),
     SubAgents("Sub-agents", Icons.Default.AccountTree),
     Mcp("MCP servers", Icons.Default.Extension),
     Gateway("Messaging gateway", Icons.Default.Hub),
@@ -95,6 +98,7 @@ enum class Dest(val title: String, val icon: ImageVector) {
 
 class MainActivity : ComponentActivity() {
     private val vm: ChatViewModel by viewModels()
+    private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { HermesRuntime.get(this).permissions.onResult(it) }
     private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -102,6 +106,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val rt = HermesRuntime.get(this)
+        rt.permissions.launcher = permLauncher
+        // Park browser tabs in a 1px, almost transparent host so they keep rendering in the background.
+        rt.browser.attachHost(android.widget.FrameLayout(this).also {
+            it.alpha = 0.01f
+            (window.decorView as android.view.ViewGroup).addView(it, android.view.ViewGroup.LayoutParams(1, 1))
+        })
         if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         handleShare(intent)
 
@@ -112,6 +122,9 @@ class MainActivity : ComponentActivity() {
                 var dest by rememberSaveable { mutableStateOf(Dest.Chat) }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
+                // The agent asked for the browser on screen (login / CAPTCHA hand-over).
+                val showReq by rt.browser.showRequests.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(showReq) { if (showReq > 0) dest = Dest.Browser }
                 val scope = rememberCoroutineScope()
 
                 if (!onboarded) {
@@ -171,6 +184,7 @@ class MainActivity : ComponentActivity() {
                                 Dest.Skills -> SkillsScreen(rt, vm) { dest = Dest.Chat }
                                 Dest.Memory -> MemoryScreen(rt)
                                 Dest.Cron -> CronScreen(rt)
+                                Dest.Browser -> BrowserScreen(rt)
                                 Dest.SubAgents -> SubAgentsScreen(rt)
                                 Dest.Mcp -> McpScreen(rt)
                                 Dest.Gateway -> GatewayScreen(rt)

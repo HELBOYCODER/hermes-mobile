@@ -71,6 +71,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         Toolset("device", "Android phone features (clipboard, notifications, URLs, battery)"),
         Toolset("bots", "Bot Mode: hand work to other bots in your roster (@mentions)"),
         Toolset("mcp", "Tools from connected MCP servers"),
+        Toolset("browser", "Real web browser: navigate, click, type, screenshots"),
     )
 
     val all: List<Tool> by lazy {
@@ -90,6 +91,9 @@ class ToolRegistry(private val runtime: HermesRuntime) {
             VisionTool(),
             AndroidDeviceTool(),
             MessageBotTool(),
+            com.ersaz.hermesmobile.browser.BrowserTool(),
+            com.ersaz.hermesmobile.device.PhoneTool(),
+            com.ersaz.hermesmobile.device.WeatherTool(),
         )
     }
 
