@@ -102,11 +102,11 @@ class GatewayManager(private val rt: HermesRuntime) {
         val code = existing?.code ?: (1..6).map { "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".random() }.joinToString("")
         if (existing == null) {
             _pending.value = _pending.value + PairingRequest(msg.platform, msg.userId, msg.userName, code, System.currentTimeMillis())
-            rt.notify("Hermes pairing request", "${msg.userName} on ${msg.platform} wants access. Code $code — approve in Bot mode.")
+            rt.notify("Hermes pairing request", "${msg.userName} on ${msg.platform} wants access. Code $code — approve in Messaging gateway.")
             log("pairing request from ${msg.userName} (${msg.userId}) code $code")
         }
         adapter.outputFor(msg.chatId, null).send(
-            "☤ Hi! This Hermes agent is private.\nYour pairing code: $code\nAsk the owner to approve it in the Hermes app → Bot mode."
+            "☤ Hi! This Hermes agent is private.\nYour pairing code: $code\nAsk the owner to approve it in the Hermes app → Messaging gateway."
         )
         return false
     }
@@ -182,7 +182,7 @@ class GatewayManager(private val rt: HermesRuntime) {
     /** Send to "platform" (home channel), "platform:chatId" or "platform:chatId:thread". */
     suspend fun sendTo(target: String, text: String): Result<String> {
         val platform = target.substringBefore(':').lowercase()
-        val adapter = adapters[platform] ?: return Result.failure(IllegalStateException("$platform is not connected (enable Bot mode and add its token)"))
+        val adapter = adapters[platform] ?: return Result.failure(IllegalStateException("$platform is not connected (enable the messaging gateway and add its token)"))
         val rest = target.substringAfter(':', "")
         val chatId = rest.substringBefore(':').ifBlank { homes().optString(platform) }
         if (chatId.isBlank()) return Result.failure(IllegalStateException("No home channel for $platform — send /sethome in the chat first"))

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.DrawerValue
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ersaz.hermesmobile.ui.BotsScreen
 import com.ersaz.hermesmobile.ui.ChatScreen
 import com.ersaz.hermesmobile.ui.ChatViewModel
 import com.ersaz.hermesmobile.ui.CronScreen
@@ -74,12 +76,13 @@ import kotlinx.coroutines.launch
 
 enum class Dest(val title: String, val icon: ImageVector) {
     Chat("Chat", Icons.AutoMirrored.Filled.Chat),
+    Bots("Bot mode", Icons.Default.SmartToy),
     Terminal("Terminal", Icons.Default.Terminal),
     Sessions("Sessions", Icons.Default.History),
     Skills("Skills", Icons.Default.AutoStories),
     Memory("Memory", Icons.Default.Psychology),
     Cron("Scheduled tasks", Icons.Default.Schedule),
-    Gateway("Bot mode", Icons.Default.Hub),
+    Gateway("Messaging gateway", Icons.Default.Hub),
     WebUi("Remote WebUI", Icons.Default.Language),
     Settings("Settings", Icons.Default.Settings),
 }
@@ -101,7 +104,7 @@ class MainActivity : ComponentActivity() {
             val skin = remember(version) { Skins.byName(rt.settings.skin) }
             HermesTheme(skin) {
                 var dest by rememberSaveable { mutableStateOf(Dest.Chat) }
-                var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank()) }
+                var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
 
@@ -141,7 +144,7 @@ class MainActivity : ComponentActivity() {
                         topBar = {
                             TopAppBar(
                                 title = {
-                                    Text(if (dest == Dest.Chat) vm.sessionTitle.ifBlank { skin.agentName } else dest.title,
+                                    Text(if (dest == Dest.Chat) (vm.activeBot?.let { "${it.name} · " }.orEmpty() + vm.sessionTitle.ifBlank { skin.agentName }) else dest.title,
                                         color = skin.title, fontSize = 17.sp, maxLines = 1)
                                 },
                                 navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.accent) } },
@@ -156,6 +159,7 @@ class MainActivity : ComponentActivity() {
                         Column(Modifier.padding(pad).fillMaxSize()) {
                             when (dest) {
                                 Dest.Chat -> ChatScreen(vm)
+                                Dest.Bots -> BotsScreen(rt, vm) { dest = Dest.Chat }
                                 Dest.Terminal -> TerminalScreen(rt)
                                 Dest.Sessions -> SessionsScreen(rt, vm) { dest = Dest.Chat }
                                 Dest.Skills -> SkillsScreen(rt, vm) { dest = Dest.Chat }

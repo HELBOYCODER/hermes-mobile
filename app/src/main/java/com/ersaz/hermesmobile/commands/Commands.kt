@@ -273,7 +273,7 @@ object Commands {
                 CommandResult.Reply(if (agent.yolo) "⚡ YOLO on — dangerous commands run without approval (this session)." else "🛡️ YOLO off — approvals required.")
             }
             "config" -> CommandResult.Reply(
-                "⚙️ Config\n• provider: ${s.provider}\n• base_url: ${s.baseUrl}\n• model: ${s.model}\n• api_key: ${if (s.apiKey.isBlank()) "(none)" else "••••" + s.apiKey.takeLast(4)}\n" +
+                "⚙️ Config\n• provider: ${s.provider}\n• base_url: ${s.baseUrl}\n• model: ${s.model}\n• api_key: ${if (rt.usesNousLogin()) "Nous Portal login (${s.nousAccount.ifBlank { "signed in" }})" else if (s.apiKey.isBlank()) "(none)" else "••••" + s.apiKey.takeLast(4)}\n" +
                     "• personality: ${s.personality.ifBlank { "none" }}\n• skin: ${s.skin}\n• max_iterations: ${s.maxIterations}\n" +
                     "• context_length: ${s.contextLength}\n• approvals: ${s.approvalMode}\n• disabled toolsets: ${s.disabledToolsets.ifBlank { "none" }}"
             )
@@ -319,10 +319,10 @@ object Commands {
                     else -> CommandResult.Reply("Usage: /skills [list|view|search|delete] <name>")
                 }
             }
-            "memory" -> CommandResult.Reply(
-                "🧠 MEMORY.md (${rt.memory.usage("memory")})\n" + rt.memory.entries("memory").joinToString("\n") { "• $it" }.ifBlank { "(empty)" } +
-                    "\n\n👤 USER.md (${rt.memory.usage("user")})\n" + rt.memory.entries("user").joinToString("\n") { "• $it" }.ifBlank { "(empty)" }
-            )
+            "memory" -> host.agent.memory.let { mem -> CommandResult.Reply(
+                "🧠 MEMORY.md (${mem.usage("memory")})\n" + mem.entries("memory").joinToString("\n") { "• $it" }.ifBlank { "(empty)" } +
+                    "\n\n👤 USER.md (${mem.usage("user")})\n" + mem.entries("user").joinToString("\n") { "• $it" }.ifBlank { "(empty)" }
+            ) }
             "cron" -> cron(arg, host)
             "platforms" -> CommandResult.Reply(rt.gateway.statusText())
             "version" -> CommandResult.Reply("☤ Hermes Agent for Android ${HermesRuntime.VERSION}\nSandbox: Alpine Linux on PRoot (${if (rt.sandbox.isInstalled()) "installed" else "not installed"})")

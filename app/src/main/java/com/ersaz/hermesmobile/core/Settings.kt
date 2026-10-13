@@ -7,11 +7,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
+/** Where the Nous Portal OAuth session lives (Settings in the app, a fake in tests). */
+interface NousTokenStore {
+    var authMode: String
+    var nousAccessToken: String
+    var nousRefreshToken: String
+    var nousExpiresAt: Long
+    var nousScope: String
+    var nousAccount: String
+}
+
 /**
  * App configuration — the mobile equivalent of ~/.hermes/config.yaml + .env.
  * Every write bumps [version] so Compose screens can recompose on change.
  */
-class Settings(context: Context) {
+class Settings(context: Context) : NousTokenStore {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("hermes_settings", Context.MODE_PRIVATE)
 
@@ -32,6 +42,13 @@ class Settings(context: Context) {
         }
     }
 
+    private fun long(key: String, def: Long) = object : ReadWriteProperty<Any?, Long> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getLong(key, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
+            prefs.edit().putLong(key, value).apply(); _version.value++
+        }
+    }
+
     private fun int(key: String, def: Int) = object : ReadWriteProperty<Any?, Int> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getInt(key, def)
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
@@ -43,6 +60,14 @@ class Settings(context: Context) {
     var provider by str("provider", "openrouter")
     var baseUrl by str("base_url", "https://openrouter.ai/api/v1")
     var apiKey by str("api_key", "")
+    /** key = the API key above; nous_oauth = signed in to Nous Portal (device-code login, auto-refreshed). */
+    override var authMode by str("auth_mode", "key")
+    override var nousAccessToken by str("nous_access_token", "")
+    override var nousRefreshToken by str("nous_refresh_token", "")
+    override var nousExpiresAt by long("nous_expires_at", 0L)
+    override var nousScope by str("nous_scope", "")
+    override var nousAccount by str("nous_account", "")
+    var nousRoute by str("nous_route", "") // paid | free | welcome — what the account may use
     var model by str("model", "nousresearch/hermes-4-405b")
     var auxModel by str("aux_model", "") // titles/compression; empty = main model
     var contextLength by int("context_length", 128_000)
@@ -73,7 +98,7 @@ class Settings(context: Context) {
     var memoryEnabled by bool("memory_enabled", true)
     var userProfileEnabled by bool("user_profile_enabled", true)
 
-    // --- Gateway / bot mode ------------------------------------------------
+    // --- Messaging gateway (Telegram / Discord / Slack) ------------------------
     var botMode by bool("bot_mode", false)
     var keepAwake by bool("keep_awake", true)
     var telegramToken by str("telegram_token", "")

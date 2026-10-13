@@ -14,6 +14,7 @@ import com.ersaz.hermesmobile.agent.Agent
 import com.ersaz.hermesmobile.agent.AgentListener
 import com.ersaz.hermesmobile.agent.Session
 import com.ersaz.hermesmobile.agent.ToolCall
+import com.ersaz.hermesmobile.bots.Bot
 import com.ersaz.hermesmobile.commands.CommandHost
 import com.ersaz.hermesmobile.commands.CommandResult
 import com.ersaz.hermesmobile.commands.Commands
@@ -66,6 +67,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     var sessionTitle by mutableStateOf(""); private set
     var contextPct by mutableStateOf(0); private set
     var input by mutableStateOf("")
+    /** The Bot Mode profile this chat talks to; null = the default Hermes. */
+    var activeBot by mutableStateOf<Bot?>(null); private set
     val pendingImages = mutableStateListOf<String>()
     private var job: Job? = null
     private var seq = 0
@@ -119,16 +122,32 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     override fun newSession(): Agent {
         stop()
-        _agent = Agent(runtime, Session(source = "app"))
+        val bot = activeBot ?: runtime.bots.get(Bot.DEFAULT_ID)!!
+        _agent = runtime.botHub.agentFor(bot, runtime.botHub.newChatSession(bot), if (bot.isDefault) "app" else "bot")
         ui { rebuild(); status = "" }
         return _agent
     }
 
     override fun resumeSession(session: Session): Agent {
         stop()
-        _agent = Agent(runtime, session, if (session.source in setOf("telegram", "discord", "slack")) session.source else "app")
+        val bot = session.botId?.let { runtime.bots.get(it) }
+        activeBot = bot?.takeUnless { it.isDefault }
+        _agent = when {
+            bot != null && !bot.isDefault -> runtime.botHub.agentFor(bot, session, "bot")
+            else -> Agent(runtime, session, if (session.source in setOf("telegram", "discord", "slack")) session.source else "app")
+        }
         ui { rebuild() }
         return _agent
+    }
+
+    /** Switch the chat to [bot]'s own conversation (its latest chat, or a fresh one). */
+    fun openBot(bot: Bot) {
+        val target = runtime.botHub.mainSessionFor(bot)
+        activeBot = bot.takeUnless { it.isDefault }
+        if (target.id == agent.session.id) return // already showing this bot's chat
+        stop()
+        _agent = runtime.botHub.agentFor(bot, target, if (bot.isDefault) "app" else "bot")
+        ui { rebuild(); status = "" }
     }
 
     fun openSession(id: String) { runtime.sessions.load(id)?.let { resumeSession(it) } }

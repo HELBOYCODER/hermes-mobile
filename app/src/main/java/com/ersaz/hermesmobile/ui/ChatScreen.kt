@@ -189,7 +189,7 @@ fun Banner() {
         Text("Welcome to ${skin.agentName}! Type your message or /help for commands.", color = skin.text.copy(alpha = 0.8f),
             fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, start = 24.dp, end = 24.dp))
         Spacer(Modifier.size(10.dp))
-        listOf("💻 Sandbox terminal · Alpine Linux", "🧠 Persistent memory & skills", "📡 Bot mode: Telegram · Discord · Slack", "⏰ Cron scheduler · 🔀 subagents")
+        listOf("💻 Sandbox terminal · Alpine Linux", "🧠 Persistent memory & skills", "🤖 Bot mode: a roster of agents · 📡 Telegram · Discord · Slack", "⏰ Cron scheduler · 🔀 subagents")
             .forEach { Text(it, color = skin.label, fontSize = 12.sp) }
     }
 }

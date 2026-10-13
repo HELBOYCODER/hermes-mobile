@@ -62,37 +62,32 @@ fun SettingsScreen(rt: HermesRuntime) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
-    var models by remember { mutableStateOf<List<String>>(emptyList()) }
-    var modelMsg by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         SectionTitle("🤖 Model provider")
-        Hint("Any OpenAI-compatible endpoint works. Nous Portal and OpenRouter give access to Hermes models; local servers (Ollama, LM Studio) on your LAN work too.")
+        Hint("Any OpenAI-compatible endpoint works. Sign in to Nous Portal (free models included) or paste an API key for OpenRouter, OpenAI and others; local servers (Ollama, LM Studio) on your LAN work too.")
         Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
             val p = Providers.byId(id)
             s.provider = id
-            if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
-            if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
+            // A signed-in Nous account keeps the route/model picked at login.
+            if (!(id == "nous" && rt.nousAuth.signedIn)) {
+                if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
+                if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
+            }
             refresh++
         }
         key(refresh) {
+            val nousLogin = s.provider == "nous"
+            if (nousLogin) NousLoginCard(rt)
             Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-            Field("API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            if (!rt.usesNousLogin()) {
+                Field(if (nousLogin) "…or a Nous Portal API key" else "API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            }
             Field("Model", s.model) { s.model = it.trim() }
         }
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedButton(onClick = {
-                modelMsg = "Loading…"
-                scope.launch {
-                    models = runCatching { rt.llmClient().listModels() }.getOrElse { modelMsg = "Failed: ${it.message}"; emptyList() }
-                    if (models.isNotEmpty()) modelMsg = "${models.size} models"
-                }
-            }) { Text("Fetch models") }
-            Text("  $modelMsg", color = skin.dim, fontSize = 12.sp)
-        }
-        if (models.isNotEmpty()) {
-            Picker("Pick model", models.take(400).map { it to it }, s.model) { s.model = it; refresh++ }
-        }
+        var pickModel by remember { mutableStateOf(false) }
+        OutlinedButton(onClick = { pickModel = true }) { Text("Browse models (free ones marked)") }
+        if (pickModel) ModelPickerDialog(rt, s.model, onPick = { rt.useModel(it); pickModel = false; refresh++ }, onDismiss = { pickModel = false })
         Field("Auxiliary model (titles, compression; blank = main)", s.auxModel) { s.auxModel = it.trim() }
         Field("Context length (tokens)", s.contextLength.toString(), number = true) { it.toIntOrNull()?.let { v -> s.contextLength = v } }
         Field("Max tool iterations per turn", s.maxIterations.toString(), number = true) { it.toIntOrNull()?.let { v -> s.maxIterations = v } }

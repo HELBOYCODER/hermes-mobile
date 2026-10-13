@@ -15,6 +15,8 @@ import com.ersaz.hermesmobile.agent.Session
 import com.ersaz.hermesmobile.agent.SessionStore
 import com.ersaz.hermesmobile.agent.SkillStore
 import com.ersaz.hermesmobile.agent.tools.ToolRegistry
+import com.ersaz.hermesmobile.auth.NousAuth
+import com.ersaz.hermesmobile.auth.NousLogin
 import com.ersaz.hermesmobile.bridge.LocalBridge
 import com.ersaz.hermesmobile.core.Settings
 import com.ersaz.hermesmobile.cron.CronRunner
@@ -44,6 +46,11 @@ class HermesRuntime(val app: Application) {
         .pingInterval(30, TimeUnit.SECONDS)
         .build()
 
+    val nousAuth = NousAuth(http, settings)
+    val nousLogin = NousLogin(this)
+    /** Bearer supplier for Nous Portal OAuth sessions (refreshes on demand). */
+    val nousKeyProvider: suspend (Boolean) -> String? = { force -> nousAuth.accessToken(force) }
+
     val sandbox = Sandbox(app, settings)
     val processes = ProcessRegistry(sandbox)
 
@@ -53,6 +60,8 @@ class HermesRuntime(val app: Application) {
     val memory = MemoryStore(File(hermesHome, "memories"))
     val skills = SkillStore(File(hermesHome, "skills"))
     val cron = CronStore(File(hermesHome, "cron/jobs.json"))
+    val bots = com.ersaz.hermesmobile.bots.BotStore(File(hermesHome, "bots"), memory)
+    val botHub = com.ersaz.hermesmobile.bots.BotHub(this)
     val tools = ToolRegistry(this)
     val speech = Speech(app, File(hermesHome, "audio"))
     val gateway = GatewayManager(this)
@@ -70,7 +79,19 @@ class HermesRuntime(val app: Application) {
         }
     }
 
-    fun llmClient(): LlmClient = LlmClient(http, settings.baseUrl, settings.apiKey, settings.provider)
+    fun usesNousLogin(): Boolean = settings.provider == "nous" && nousAuth.signedIn
+
+    fun llmClient(): LlmClient =
+        if (usesNousLogin()) LlmClient(http, settings.baseUrl, "", settings.provider, nousKeyProvider)
+        else LlmClient(http, settings.baseUrl, settings.apiKey, settings.provider)
+
+    /** Best-effort return to the app after the browser step of a login (blocked by Android 10+ in the background; the notification covers that). */
+    fun bringToFront() {
+        runCatching {
+            app.startActivity(Intent(app, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        }
+    }
 
     /** Cheap side-call (titles, compression summaries) on the auxiliary or main model. */
     suspend fun auxComplete(prompt: String, maxTokens: Int = 1500): String? = try {

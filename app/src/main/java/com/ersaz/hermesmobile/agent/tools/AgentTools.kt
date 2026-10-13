@@ -40,7 +40,7 @@ class MemoryTool : Tool("memory", "memory", MemoryStore.SCHEMA.getString("descri
         val target = args.optString("target", "memory").let { if (it == "user") "user" else "memory" }
         if (target == "memory" && !ctx.runtime.settings.memoryEnabled) return fail("Agent notes memory is disabled; use target='user'.")
         if (target == "user" && !ctx.runtime.settings.userProfileEnabled) return fail("User profile memory is disabled.")
-        return ctx.runtime.memory.apply(target, MemoryStore.opsFrom(args)).toString()
+        return ctx.agent.memory.apply(target, MemoryStore.opsFrom(args)).toString()
     }
 }
 
@@ -223,6 +223,7 @@ class CronjobTool : Tool(
                     name = args.optString("name").ifBlank { prompt.take(40) }, prompt = prompt, schedule = schedule,
                     deliver = args.optString("deliver", "origin"), origin = ctx.session.chatKey ?: "local",
                     skills = args.optJSONArray("skills")?.strings() ?: emptyList(),
+                    botId = ctx.agent.bot?.takeUnless { it.isDefault }?.id,
                 ))
                 ctx.runtime.ensureServiceForCron()
                 ok("job" to job.describe())
@@ -421,5 +422,41 @@ class AndroidDeviceTool : Tool(
             }
             else -> fail("Unknown action")
         }
+    }
+}
+
+// ---------------------------------------------------------------- message_bot (Bot Mode)
+
+class MessageBotTool : Tool(
+    "message_bot", "bots",
+    "Hand a message or task to another bot in the roster (Bot Mode). It arrives as \"Message from 🤖 <you> (@<you>): …\" in that bot's " +
+        "persistent Bot Chat; the tool waits for its reply and returns it. Use when the user @mentions a bot or the task suits another bot's specialty. " +
+        "Use action='list' to see the roster. Give the bot all the context it needs: it does not see this conversation.",
+    "🤖",
+) {
+    override val parameters = obj(
+        "action" to str("send or list", listOf("send", "list")),
+        "bot" to str("Bot id or name, with or without @"),
+        "message" to str("What to tell it"),
+    )
+
+    override suspend fun run(args: JSONObject, ctx: ToolContext): String {
+        val rt = ctx.runtime
+        if (args.optString("action") == "list") {
+            return ok("bots" to JSONArray(rt.bots.all().filter { it.id != ctx.agent.botId }.map {
+                JSONObject().put("id", it.id).put("name", it.name).put("title", it.title).put("description", it.description)
+            }))
+        }
+        val target = rt.bots.get(args.optString("bot")) ?: return fail("No bot '${args.optString("bot")}'. Use action='list'.")
+        val message = args.optString("message")
+        if (message.isBlank()) return fail("message is required")
+        if (target.id == ctx.agent.botId) return fail("You can't message yourself.")
+        val from = rt.bots.get(ctx.agent.botId)
+        ctx.listener.onStatus("🤖 → ${target.name}: ${message.take(80)}")
+        val chain = ctx.agent.botChain.ifEmpty { listOf(ctx.agent.botId) }
+        return rt.botHub.deliver(from, target, message, chain).fold(
+            { ok("from" to target.id, "reply" to it) },
+            { fail(it.message ?: "delivery failed") },
+        )
     }
 }

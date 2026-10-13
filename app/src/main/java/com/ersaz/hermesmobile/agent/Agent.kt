@@ -1,6 +1,7 @@
 package com.ersaz.hermesmobile.agent
 
 import com.ersaz.hermesmobile.HermesRuntime
+import com.ersaz.hermesmobile.bots.Bot
 import com.ersaz.hermesmobile.agent.tools.ToolContext
 import com.ersaz.hermesmobile.core.parseArgs
 import com.ersaz.hermesmobile.llm.LlmClient
@@ -31,6 +32,8 @@ class Agent(
     val platform: String = "app",
     private val enabledToolsets: Set<String>? = null, // null = settings-driven
     val depth: Int = 0, // subagent nesting
+    /** Bot Mode profile this agent runs as; null = the default Hermes. */
+    val bot: Bot? = null,
 ) {
     @Volatile var interrupted = false
         private set
@@ -42,6 +45,12 @@ class Agent(
     /** Commands approved for the rest of this session ("always" answers). */
     val sessionApprovals = mutableSetOf<String>()
     var yolo = false
+    /** Bots already involved in this bot-to-bot chain (loop guard for message_bot). */
+    var botChain: List<String> = emptyList()
+
+    val botId: String get() = bot?.id ?: Bot.DEFAULT_ID
+    /** The memory this agent reads and writes: its own for a bot, the shared one for default Hermes. */
+    val memory get() = runtime.bots.memoryFor(bot)
 
     fun interrupt() {
         interrupted = true
@@ -50,14 +59,17 @@ class Agent(
 
     fun steer(text: String) { steerQueue += text }
 
-    fun model(): String = session.modelOverride?.ifBlank { null } ?: runtime.settings.model
+    fun model(): String = session.modelOverride?.ifBlank { null }
+        ?: bot?.model?.ifBlank { null } ?: runtime.settings.model
 
-    fun tools() = runtime.tools.available(enabledToolsets, depth)
+    fun tools() = runtime.tools.available(enabledToolsets, depth, bot?.disabledToolsets.orEmpty().toSet())
+        .filter { it.name != "message_bot" || runtime.bots.all().size > 1 } // nobody to message in a one-bot roster
 
     /** Run one user turn through the tool-calling loop. Returns the final assistant text. */
     suspend fun runTurn(userText: String, images: List<String> = emptyList(), listener: AgentListener): String {
         interrupted = false
         running = true
+        if (depth == 0) runtime.botHub.setRunning(botId, true)
         try {
             val settings = runtime.settings
             if (session.systemPrompt == null) {
@@ -144,6 +156,7 @@ class Agent(
         } finally {
             running = false
             llm = null
+            if (depth == 0) runtime.botHub.setRunning(botId, false)
         }
     }
 
@@ -267,14 +280,23 @@ object PromptBuilder {
         "slack" to "You are replying through Slack. Use Slack-friendly formatting (*bold*, `code`), avoid markdown tables.",
         "terminal" to "You are replying to the `hermes` CLI inside the sandbox terminal; plain text renders best.",
         "cron" to "You are running a scheduled task unattended. Do the work and produce the final report; nobody can answer questions.",
+        "bot" to "You are replying inside the Hermes app's Bot Mode. A message starting with \"Message from 🤖\" comes from another bot, not the user: answer it directly and concisely; your reply is returned to that bot automatically.",
     )
 
     fun build(runtime: HermesRuntime, agent: Agent): String {
         val s = runtime.settings
         val home = runtime.hermesHome
         val parts = mutableListOf<String>()
-        val soul = java.io.File(home, "SOUL.md").takeIf { it.exists() }?.readText()?.trim()
+        val bot = agent.bot
+        val soul = if (bot != null && !bot.isDefault) bot.soul.trim().ifBlank { null }
+            else java.io.File(home, "SOUL.md").takeIf { it.exists() }?.readText()?.trim()
         parts += soul?.ifBlank { null } ?: DEFAULT_IDENTITY
+        if (bot != null && !bot.isDefault) {
+            parts += "## Your bot identity\nYou are ${bot.name} (@${bot.id})" +
+                (if (bot.title.isNotBlank()) ", ${bot.title}" else "") + "." +
+                (if (bot.description.isNotBlank()) " ${bot.description}" else "") +
+                " You are one bot in a roster of Hermes agents, each with its own memory and chat."
+        }
         Personalities.resolve(s.personality)?.let { parts += "## Personality\n$it" }
         if (s.customSystemPrompt.isNotBlank()) parts += s.customSystemPrompt.trim()
 
@@ -287,8 +309,9 @@ object PromptBuilder {
         if ("terminal" in toolNames) parts += ENVIRONMENT
         PLATFORM_HINTS[agent.platform]?.let { parts += it }
 
-        if (s.memoryEnabled) runtime.memory.promptBlock("memory")?.let { parts += it }
-        if (s.userProfileEnabled) runtime.memory.promptBlock("user")?.let { parts += it }
+        if (s.memoryEnabled) agent.memory.promptBlock("memory")?.let { parts += it }
+        if (s.userProfileEnabled) agent.memory.promptBlock("user")?.let { parts += it }
+        if ("message_bot" in toolNames) runtime.botHub.rosterPrompt(agent)?.let { parts += it }
         if ("skill_view" in toolNames) runtime.skills.indexBlock()?.let { parts += it }
 
         // Project context files, like Hermes loading AGENTS.md from the working directory.

@@ -259,7 +259,7 @@ fun CronScreen(rt: HermesRuntime) {
     LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
         item {
             Hint("Hermes runs these unattended in fresh sessions. Schedules: 30m · every 2h · 0 9 * * * · 2026-10-20T09:00. " +
-                "Deliver to local (notification), telegram / discord / slack (home channel) or platform:chat_id. Runs while the app or bot mode is alive.")
+                "Deliver to local (notification), telegram / discord / slack (home channel) or platform:chat_id. Runs while the app or the messaging gateway is alive.")
             SectionTitle("New scheduled task")
             OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(schedule, { schedule = it }, label = { Text("Schedule") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -314,9 +314,9 @@ fun GatewayScreen(rt: HermesRuntime) {
     val paired = remember(refresh, pending) { rt.gateway.pairedUsers() }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-        Hint("Bot mode runs the Hermes gateway on this phone: one agent and one memory across Telegram, Discord and Slack, with per-chat sessions, slash commands, approvals and cron delivery. A foreground service keeps it alive.")
+        Hint("The messaging gateway runs Hermes on this phone as a bot for other apps: one agent and one memory across Telegram, Discord and Slack, with per-chat sessions, slash commands, approvals and cron delivery. A foreground service keeps it alive.")
         Card {
-            Toggle("☤ Bot mode", s.botMode, if (running) "Gateway running" else "Gateway stopped") { on ->
+            Toggle("☤ Messaging gateway", s.botMode, if (running) "Gateway running" else "Gateway stopped") { on ->
                 s.botMode = on
                 if (on) { HermesService.start(ctx); rt.gateway.start() } else { rt.gateway.stop(); HermesService.stop(ctx) }
                 refresh++

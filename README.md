@@ -1,8 +1,8 @@
 # Hermes Mobile — Hermes Agent for Android
 
 A native Android port of [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT):
-the self-improving agent with persistent memory, skills, cron, subagents and a multi-platform
-**bot mode**, plus a built-in **Linux sandbox terminal**. You don't need Termux or root: Alpine Linux runs
+the self-improving agent with persistent memory, skills, cron, subagents, a
+**Bot Mode** roster of named agents and a Telegram/Discord/Slack **messaging gateway**, plus a built-in **Linux sandbox terminal**. You don't need Termux or root: Alpine Linux runs
 inside the app through PRoot, the same approach [OpenMinis](https://github.com/OpenMinis/openminis) uses.
 
 Not affiliated with Nous Research. Open source, no Play Store, no analytics SDKs.
@@ -20,7 +20,9 @@ Not affiliated with Nous Research. Open source, no Play Store, no analytics SDKs
 | Skills: `~/.hermes/skills/<cat>/<name>/SKILL.md` (agentskills.io format), `/<skill>` invocation, 19 bundled skills | ✅ |
 | Sessions: persisted, searchable (`session_search`), resumable, auto-titled, exportable | ✅ |
 | Cron scheduler: `30m`, `every 2h`, `0 9 * * *`, ISO time; delivered to a notification or any chat | ✅ |
-| **Bot mode / gateway**: Telegram, Discord, Slack (Socket Mode). Per-chat sessions, DM pairing codes, allowlists, home channels (`/sethome`), tool-progress messages, file and voice delivery | ✅ |
+| **Bot Mode** (port of [Hermes Bot Mode](https://github.com/NousResearch/Hermes-Bot-Mode)): a roster of named bots, each a Hermes profile with its own chat, avatar, SOUL, memory, model pin, toolsets and routines. Groups and group chats, bot-to-bot messaging, `@mention` hand-offs, Active-now strip, duplicate/delete | ✅ |
+| **Messaging gateway**: Telegram, Discord, Slack (Socket Mode). Per-chat sessions, DM pairing codes, allowlists, home channels (`/sethome`), tool-progress messages, file and voice delivery | ✅ |
+| **Sign in with Nous Portal** (device-code OAuth, no API key) with automatic model selection: subscribers get the full catalog, free accounts get the free models | ✅ |
 | ~40 slash commands shared by the app, the CLI and the bots (`/help` lists them) | ✅ |
 | 14 personalities (`/personality`), 9 skins with their palettes, spinner faces and branding (`/skin`) | ✅ |
 | Providers: Nous Portal, OpenRouter, OpenAI, Anthropic, Gemini, xAI, DeepSeek, Groq, Mistral, Ollama/LM Studio, any OpenAI-compatible URL | ✅ |
@@ -70,21 +72,26 @@ Push a `v*` tag to get a GitHub Release with the APK attached.
 
 ## First run
 
-1. Pick a provider and paste an API key. Nous Portal or OpenRouter give you the Hermes models.
+1. **Sign in with Nous Portal** (browser, no key to copy). Free accounts are switched to a free model that
+   supports tool calling automatically; subscribers get the full catalog. Or pick another provider and paste a key.
 2. **Chat**: talk to Hermes; type `/` for commands.
 3. **Terminal**: the sandbox installs itself (about 4 MB). Try `apk add python3`, then run `hermes`.
-4. **Bot mode**: paste a Telegram/Discord/Slack token and switch it on. When an unknown user DMs the
+4. **Bot mode**: tap *New agent* to add bots (name, avatar, SOUL, model…). Tap a bot to chat with it; write
+   `@researcher have a look at this` and the active bot hands it off. Put bots in a group and use *Open chat*
+   for a shared room. Per-bot *Routines* run on a schedule.
+5. **Messaging gateway**: paste a Telegram/Discord/Slack token and switch it on. When an unknown user DMs the
    bot, they get a pairing code; approve it in the app. Send `/sethome` in a chat to make it the
    cron delivery target.
-5. Turn off battery optimization (button in Bot mode) so the gateway keeps running in the
+6. Turn off battery optimization (button in Messaging gateway) so the gateway keeps running in the
    background.
 
 ## راهنمای کوتاه (فارسی)
 
-* این اپ نسخهٔ بومی اندروید **Hermes Agent** است: حافظهٔ دائمی، اسکیل‌ها، زمان‌بندی (cron)، ساب‌ایجنت و **حالت ربات** (تلگرام، دیسکورد، اسلک).
+* این اپ نسخهٔ بومی اندروید **Hermes Agent** است: حافظهٔ دائمی، اسکیل‌ها، زمان‌بندی (cron)، ساب‌ایجنت، **Bot Mode** (فهرستی از ایجنت‌های نام‌دار با چت، آواتار، شخصیت، حافظه، مدل و روتین جداگانه؛ گروه‌ها، پیام‌دادن ربات‌ها به هم و `@mention`) و **درگاه پیام‌رسان** (تلگرام، دیسکورد، اسلک).
 * **ترمینال sandbox** داخل خود اپ است (Alpine Linux روی PRoot) و به Termux یا روت نیازی ندارد. با `apk add` بسته نصب کنید و با دستور `hermes` داخل ترمینال با ایجنت حرف بزنید.
 * برای بیلد: اول `./scripts/fetch_sandbox.sh` و بعد `./gradlew assembleDebug`.
-* در اولین اجرا provider و کلید API را وارد کنید. بعد از بخش Bot mode توکن ربات تلگرام را بگذارید و حالت ربات را روشن کنید.
+* در اولین اجرا می‌توانید با دکمهٔ **Sign in with Nous Portal** (بدون کلید API، فقط تأیید در مرورگر) وارد شوید؛ حساب رایگان خودکار روی مدل‌های رایگان تنظیم می‌شود و حساب اشتراکی کل کاتالوگ را می‌گیرد. یا provider و کلید API را دستی بدهید.
+* در بخش **Bot mode** با «New agent» ربات بسازید؛ در چت بنویسید `@researcher این را ببین` تا ربات فعلی کار را به او بسپارد. توکن تلگرام/دیسکورد/اسلک در بخش **Messaging gateway** است.
 
 ## License
 
