@@ -12,3 +12,6 @@ captures/
 *.keystore
 *.jks
 *.b64
+# Sandbox payload — fetched by scripts/fetch_sandbox.sh (build artifacts, not committed)
+app/src/main/jniLibs/
+app/src/main/assets/sandbox/

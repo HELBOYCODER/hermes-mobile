@@ -2,7 +2,12 @@ pluginManagement {
     repositories { google(); mavenCentral(); gradlePluginPortal() }
 }
 dependencyResolutionManagement {
-    repositories { google(); mavenCentral() }
+    repositories {
+        google()
+        mavenCentral()
+        // Termux terminal-emulator / terminal-view (Apache-2.0) for the sandbox terminal
+        maven { url 'https://jitpack.io' }
+    }
 }
 rootProject.name = "hermes-mobile"
 include ':app'
