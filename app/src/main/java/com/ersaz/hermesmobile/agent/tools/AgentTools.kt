@@ -376,11 +376,14 @@ class VisionTool : Tool(
 
 class AndroidDeviceTool : Tool(
     "android_device", "device",
-    "Use phone features: clipboard_get, clipboard_set, notify (title, text), open_url, share_text, battery, device_info, vibrate.",
+    "Use phone features: clipboard_get, clipboard_set, notify (title, text), open_url, share_text, battery, device_info, vibrate, list_apps, open_app (package), open_intent (any action/uri/mime).",
     "📱",
 ) {
     override val parameters = obj(
-        "action" to str("Action", listOf("clipboard_get", "clipboard_set", "notify", "open_url", "share_text", "battery", "device_info", "vibrate")),
+        "action" to str("Action", listOf("clipboard_get", "clipboard_set", "notify", "open_url", "share_text", "battery", "device_info", "vibrate", "list_apps", "open_app", "open_intent")),
+        "package" to str("Package name for open_app, e.g. com.android.chrome"),
+        "intent_action" to str("Android intent action for open_intent, e.g. android.intent.action.VIEW"),
+        "mime" to str("Optional MIME type for open_intent"),
         "text" to str("Text for clipboard_set / notify / share_text"),
         "title" to str("Title for notify"),
         "url" to str("URL for open_url"),
@@ -418,6 +421,29 @@ class AndroidDeviceTool : Tool(
                 if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
                 else @Suppress("DEPRECATION") v.vibrate(300)
                 ok()
+            }
+            "list_apps" -> {
+                val pm = c.packageManager
+                val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                val apps = pm.queryIntentActivities(launch, 0).map { "${it.loadLabel(pm)} (${it.activityInfo.packageName})" }.sorted()
+                ok("count" to apps.size, "apps" to apps.joinToString("\n"))
+            }
+            "open_app" -> {
+                val i = c.packageManager.getLaunchIntentForPackage(args.optString("package"))
+                    ?: return@withContext fail("App not installed: ${args.optString("package")}")
+                c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok()
+            }
+            "open_intent" -> {
+                val i = Intent(args.optString("intent_action", Intent.ACTION_VIEW))
+                val uri = args.optString("url")
+                val mime = args.optString("mime")
+                when {
+                    uri.isNotBlank() && mime.isNotBlank() -> i.setDataAndType(Uri.parse(uri), mime)
+                    uri.isNotBlank() -> i.data = Uri.parse(uri)
+                    mime.isNotBlank() -> i.type = mime
+                }
+                if (args.optString("text").isNotBlank()) i.putExtra(Intent.EXTRA_TEXT, args.optString("text"))
+                try { c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok() } catch (e: Exception) { fail("No app can handle it: ${e.message}") }
             }
             else -> fail("Unknown action")
         }

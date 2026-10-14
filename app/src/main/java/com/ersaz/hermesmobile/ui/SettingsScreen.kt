@@ -1,6 +1,8 @@
 package com.ersaz.hermesmobile.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
@@ -47,6 +49,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.ersaz.hermesmobile.sandbox.GitHubLink
 import com.ersaz.hermesmobile.BuildConfig
 import com.ersaz.hermesmobile.HermesRuntime
 import com.ersaz.hermesmobile.agent.Personalities
@@ -64,8 +70,81 @@ fun SettingsScreen(rt: HermesRuntime) {
     var refresh by remember { mutableIntStateOf(0) }
     var models by remember { mutableStateOf<List<String>>(emptyList()) }
     var modelMsg by remember { mutableStateOf("") }
+    var ghMsg by remember { mutableStateOf("") }
+    var perm by remember { mutableIntStateOf(0) }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm++ }
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm++ }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { perm++; refresh++ }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        SectionTitle("Full access")
+        Hint("Hermes works best with nothing in its way. Grant these once and it can read and write your files, run any command, " +
+            "use the mic and keep working in the background.")
+        Toggle("Run commands without asking", s.approvalMode == "off",
+            "Skips the dangerous-command prompt. Turn off if you want a confirmation every time.") {
+            s.approvalMode = if (it) "off" else "manual"; refresh++
+        }
+        val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+        val filesOk = android.os.Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()
+        val micOk = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val notifOk = android.os.Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        val batteryOk = pm?.isIgnoringBatteryOptimizations(ctx.packageName) == true
+        val installOk = ctx.packageManager.canRequestPackageInstalls()
+        fun open(intent: Intent) { runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+        val pkg = Uri.parse("package:${ctx.packageName}")
+        key(perm) {
+            PermissionRow("All files access", "Read/write anywhere on phone storage (/sdcard)", filesOk) {
+                s.bindSharedStorage = true
+                open(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkg))
+            }
+            PermissionRow("Microphone", "Voice typing in chat", micOk) { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+            PermissionRow("Notifications", "Results of scheduled tasks and background jobs", notifOk) {
+                if (android.os.Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            PermissionRow("Run in background", "Don't let Android freeze Hermes (bots, cron)", batteryOk) {
+                open(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+            }
+            PermissionRow("Install apps", "Lets the agent install an APK it built or downloaded", installOk) {
+                open(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, pkg))
+            }
+        }
+
+        SectionTitle("GitHub")
+        Hint("Paste a personal access token (github.com → Settings → Developer settings → Tokens; scopes: repo, workflow, gist, read:org). " +
+            "It stays on this phone. Once connected, git in the terminal is already signed in (clone, commit, push) and the agent can use the GitHub API, " +
+            "open pull requests and manage issues for you.")
+        key(refresh) {
+            Field("Personal access token", s.githubToken, secret = true) { s.githubToken = it.trim() }
+            Field("GitHub username", s.githubUser) { s.githubUser = it.trim() }
+            Field("Commit author name", s.githubName) { s.githubName = it.trim() }
+            Field("Commit author email", s.githubEmail) { s.githubEmail = it.trim() }
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                if (s.githubToken.isBlank()) { ghMsg = "Paste a token first."; return@Button }
+                ghMsg = "Checking…"
+                scope.launch {
+                    GitHubLink.verify(rt.http, s.githubToken).fold(
+                        onSuccess = { acc ->
+                            if (s.githubUser.isBlank()) s.githubUser = acc.login
+                            if (s.githubName.isBlank()) s.githubName = acc.name
+                            if (s.githubEmail.isBlank()) s.githubEmail = acc.email
+                            GitHubLink.apply(rt.sandbox, s)
+                            ghMsg = "Connected as ${acc.login}. git is signed in."
+                            refresh++
+                        },
+                        onFailure = { ghMsg = "Failed: ${it.message}" },
+                    )
+                }
+            }) { Text("Save & connect") }
+            OutlinedButton(onClick = {
+                s.githubToken = ""; scope.launch { GitHubLink.apply(rt.sandbox, s) }; ghMsg = "Disconnected."; refresh++
+            }) { Text("Disconnect") }
+        }
+        if (ghMsg.isNotBlank()) Text(ghMsg, color = if (ghMsg.startsWith("Failed")) skin.error else skin.label, fontSize = 12.5.sp,
+            modifier = Modifier.padding(top = 6.dp))
+
         SectionTitle("🤖 Model provider")
         Hint("Any OpenAI-compatible endpoint works. Nous Portal and OpenRouter give access to Hermes models; local servers (Ollama, LM Studio) on your LAN work too.")
         Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
@@ -141,6 +220,19 @@ fun SettingsScreen(rt: HermesRuntime) {
         Text("Hermes Agent for Android ${HermesRuntime.VERSION}\nPort of NousResearch/hermes-agent (MIT). Sandbox: Alpine Linux + PRoot.",
             color = skin.dim, fontSize = 11.sp)
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun PermissionRow(title: String, hint: String, granted: Boolean, onGrant: () -> Unit) {
+    val skin = LocalSkin.current
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = skin.text, fontSize = 15.sp)
+            Text(hint, color = skin.dim, fontSize = 12.sp)
+        }
+        if (granted) Text("Granted", color = skin.ok, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+        else Button(onClick = onGrant) { Text("Grant") }
     }
 }
 

@@ -69,6 +69,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         Toolset("tts", "Text to speech"),
         Toolset("vision", "Analyze images"),
         Toolset("device", "Android phone features (clipboard, notifications, URLs, battery)"),
+        Toolset("github", "GitHub REST API with the token saved in Settings → GitHub"),
     )
 
     val all: List<Tool> by lazy {
@@ -87,6 +88,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
             TextToSpeechTool(),
             VisionTool(),
             AndroidDeviceTool(),
+            GitHubTool(),
         )
     }
 

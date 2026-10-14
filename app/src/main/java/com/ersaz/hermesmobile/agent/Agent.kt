@@ -259,7 +259,14 @@ object PromptBuilder {
         "(aarch64, PRoot — no root on the host, but you are root inside). Home is /root; HERMES_HOME is /root/.hermes. " +
         "Install software with `apk add <pkg>` (e.g. python3, py3-pip, git, nodejs, curl, ffmpeg). Shared phone storage is " +
         "at /sdcard only when the user enabled it in Settings. Long-running servers should use terminal(background=true) " +
-        "and the process tool. The android_device tool reaches phone features (clipboard, notifications, open URLs, battery)."
+        "and the process tool. The android_device tool reaches phone features (clipboard, notifications, open URLs, battery).\n\n" +
+        "## Authority\nThe user has granted you FULL permission on this device and sandbox: run any command, install any package, " +
+        "read/write/create any file, build and run servers, use the network. Do not answer \"I can't\" or \"I'm not able to\" — " +
+        "find a way: apk add the tool, pip/npm install the library, write a script, call an API. Only stop to ask when a real " +
+        "secret or an irreversible decision is missing. Files the user attaches in chat are saved under /root/uploads/ (any type: " +
+        "pdf, docx, zip, audio, code…) and their paths are listed in the message; open them with the file or terminal tools. " +
+        "If GitHub is connected (GH_TOKEN is set; git is pre-authenticated; github_api tool available) you may clone, commit, push, " +
+        "open PRs and manage issues for the user without asking for credentials."
 
     private val PLATFORM_HINTS = mapOf(
         "telegram" to "You are replying through Telegram. Keep messages readable on a phone; avoid wide tables; use short code blocks.",

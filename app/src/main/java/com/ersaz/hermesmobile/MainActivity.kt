@@ -12,6 +12,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -51,7 +55,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,6 +74,7 @@ import com.ersaz.hermesmobile.ui.SkillsScreen
 import com.ersaz.hermesmobile.ui.TerminalScreen
 import com.ersaz.hermesmobile.ui.WebUiScreen
 import com.ersaz.hermesmobile.ui.imageDataUri
+import com.ersaz.hermesmobile.ui.importAttachment
 import com.ersaz.hermesmobile.ui.theme.HermesTheme
 import com.ersaz.hermesmobile.ui.theme.Skins
 import kotlinx.coroutines.launch
@@ -110,24 +117,35 @@ class MainActivity : ComponentActivity() {
                     return@HermesTheme
                 }
 
+                val navColors = NavigationDrawerItemDefaults.colors(
+                    unselectedContainerColor = Color.Transparent, selectedContainerColor = skin.surface,
+                    selectedTextColor = skin.title, unselectedTextColor = skin.label,
+                    selectedIconColor = skin.accent, unselectedIconColor = skin.dim,
+                )
                 ModalNavigationDrawer(
                     drawerState = drawer,
                     drawerContent = {
-                        ModalDrawerSheet(drawerContainerColor = skin.surface) {
-                            Column(Modifier.verticalScroll(rememberScrollState())) {
-                                Text("${skin.symbol} ${skin.agentName}", color = skin.title, fontWeight = FontWeight.Bold, fontSize = 20.sp,
-                                    modifier = Modifier.padding(20.dp))
+                        ModalDrawerSheet(drawerContainerColor = skin.bg, drawerContentColor = skin.text) {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
+                                Row(Modifier.padding(start = 16.dp, top = 24.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(skin.symbol, color = skin.accent, fontSize = 26.sp)
+                                    Text(skin.agentName, color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 19.sp,
+                                        modifier = Modifier.padding(start = 10.dp))
+                                }
                                 NavigationDrawerItem(
-                                    label = { Text("New session") }, icon = { Icon(Icons.Default.AddComment, null) }, selected = false,
+                                    label = { Text("New chat", fontWeight = FontWeight.Medium) },
+                                    icon = { Icon(Icons.Default.AddComment, null) }, selected = false,
                                     onClick = { vm.newSession(); dest = Dest.Chat; scope.launch { drawer.close() } },
-                                    colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = skin.surface),
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        unselectedContainerColor = skin.surface, unselectedTextColor = skin.title, unselectedIconColor = skin.accent),
+                                    shape = RoundedCornerShape(14.dp),
                                 )
+                                Spacer(Modifier.height(10.dp))
                                 Dest.entries.forEach { d ->
                                     NavigationDrawerItem(
                                         label = { Text(d.title) }, icon = { Icon(d.icon, null) }, selected = d == dest,
                                         onClick = { dest = d; scope.launch { drawer.close() } },
-                                        colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = skin.surface, selectedContainerColor = skin.selection),
-                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        colors = navColors, shape = RoundedCornerShape(12.dp),
                                     )
                                 }
                                 Spacer(Modifier.height(24.dp))
@@ -138,18 +156,19 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         modifier = Modifier.fillMaxSize().background(skin.bg),
                         containerColor = skin.bg,
+                        contentWindowInsets = WindowInsets.safeDrawing,
                         topBar = {
                             TopAppBar(
                                 title = {
                                     Text(if (dest == Dest.Chat) vm.sessionTitle.ifBlank { skin.agentName } else dest.title,
-                                        color = skin.title, fontSize = 17.sp, maxLines = 1)
+                                        color = skin.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                                 },
-                                navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.accent) } },
+                                navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.label) } },
                                 actions = {
-                                    if (dest == Dest.Chat) IconButton(onClick = { vm.newSession() }) { Icon(Icons.Default.AddComment, "new", tint = skin.accent) }
+                                    if (dest == Dest.Chat) IconButton(onClick = { vm.newSession() }) { Icon(Icons.Default.AddComment, "new chat", tint = skin.label) }
                                     if (dest != Dest.Terminal) IconButton(onClick = { dest = Dest.Terminal }) { Icon(Icons.Default.Terminal, "terminal", tint = skin.label) }
                                 },
-                                colors = TopAppBarDefaults.topAppBarColors(containerColor = skin.surface),
+                                colors = TopAppBarDefaults.topAppBarColors(containerColor = skin.bg, scrolledContainerColor = skin.bg),
                             )
                         },
                     ) { pad ->
@@ -177,12 +196,22 @@ class MainActivity : ComponentActivity() {
         handleShare(intent)
     }
 
-    /** "Share to Hermes" from other apps prefills the chat input. */
+    /** "Share to Hermes" from other apps: text prefills the box, images go to vision, every other file is attached. */
     private fun handleShare(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND) return
+        if (intent?.action != Intent.ACTION_SEND && intent?.action != Intent.ACTION_SEND_MULTIPLE) return
         intent.getStringExtra(Intent.EXTRA_TEXT)?.let { vm.input = it }
+        val uris = mutableListOf<Uri>()
         @Suppress("DEPRECATION")
-        (intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uri -> imageDataUri(this, uri)?.let { vm.pendingImages += it } }
+        if (intent.action == Intent.ACTION_SEND) intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris += it }
+        else @Suppress("DEPRECATION") intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris += it }
+        if (uris.isEmpty()) return
+        Thread {
+            uris.forEach { uri ->
+                val att = importAttachment(this, uri) ?: return@forEach
+                val img = if (att.isImage) imageDataUri(this, uri) else null
+                runOnUiThread { vm.pendingFiles += att; if (img != null) vm.pendingImages += img }
+            }
+        }.start()
     }
 }
 

@@ -50,6 +50,17 @@ private fun wings(vararg g: String) = g.map { "⟪$it" to "$it⟫" }
 
 object Skins {
     val all = listOf(
+        // Hermes Desktop look (apps/desktop DESIGN.md): flat neutral surfaces, hairline strokes, one quiet accent.
+        Skin("nous", "Hermes Desktop — flat dark, the new default", false,
+            bg = c("#0D1117"), surface = c("#161B22"), selection = c("#1F2630"), border = c("#30363D"), title = c("#F0F6FC"),
+            accent = c("#8AB4FF"), dim = c("#7D8590"), text = c("#E6EDF3"), label = c("#9DA7B3"),
+            ok = c("#3FB950"), error = c("#F85149"), warn = c("#D29922"), responseBorder = c("#8AB4FF"), shellDollar = c("#8AB4FF"),
+            agentName = "Hermes", toolPrefix = "·"),
+        Skin("nous-light", "Hermes Desktop — flat light", true,
+            bg = c("#FFFFFF"), surface = c("#F4F5F7"), selection = c("#E8EAEE"), border = c("#D0D7DE"), title = c("#0D1117"),
+            accent = c("#2F5BFF"), dim = c("#6E7781"), text = c("#1F2328"), label = c("#57606A"),
+            ok = c("#1A7F37"), error = c("#CF222E"), warn = c("#9A6700"), responseBorder = c("#2F5BFF"), shellDollar = c("#2F5BFF"),
+            agentName = "Hermes", toolPrefix = "·"),
         Skin("default", "Classic Hermes — gold and kawaii", false,
             bg = c("#12121F"), surface = c("#1a1a2e"), selection = c("#3a3a55"), border = c("#CD7F32"), title = c("#FFD700"),
             accent = c("#FFBF00"), dim = c("#B8860B"), text = c("#FFF8DC"), label = c("#DAA520"),

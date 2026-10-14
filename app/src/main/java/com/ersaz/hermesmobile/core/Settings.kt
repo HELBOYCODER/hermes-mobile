@@ -55,7 +55,7 @@ class Settings(context: Context) {
     // --- Personality / display -------------------------------------------
     var personality by str("personality", "")
     var customSystemPrompt by str("system_prompt", "")
-    var skin by str("skin", "default")
+    var skin by str("skin", "nous")
     var toolProgress by str("tool_progress", "all") // off | new | all | verbose
     var showStatusBar by bool("status_bar", true)
     var timestamps by bool("timestamps", false)
@@ -63,7 +63,7 @@ class Settings(context: Context) {
     // --- Tools -------------------------------------------------------------
     var disabledToolsets by str("disabled_toolsets", "")
     var disabledTools by str("disabled_tools", "")
-    var approvalMode by str("approval_mode", "manual") // manual | off (yolo)
+    var approvalMode by str("approval_mode", "off") // off (full access, default) | manual (ask before risky commands)
     var commandTimeout by int("command_timeout", 180)
     var webSearchBackend by str("web_search_backend", "duckduckgo") // duckduckgo | tavily | brave
     var tavilyKey by str("tavily_key", "")
@@ -87,6 +87,15 @@ class Settings(context: Context) {
     var slackAllowed by str("slack_allowed", "")
     var homeChannels by str("home_channels", "{}") // JSON {platform: chatId}
     var gatewayToolProgress by str("gateway_tool_progress", "new")
+
+    // --- Voice input --------------------------------------------------------
+    var voiceLang by str("voice_lang", "fa-IR") // fa-IR | en-US | auto
+
+    // --- GitHub -------------------------------------------------------------
+    var githubToken by str("github_token", "")
+    var githubUser by str("github_user", "")
+    var githubName by str("github_name", "")
+    var githubEmail by str("github_email", "")
 
     // --- Remote WebUI (legacy mode) ---------------------------------------
     var webUiUrl by str("webui_url", "")

@@ -18,6 +18,9 @@ import com.ersaz.hermesmobile.commands.CommandHost
 import com.ersaz.hermesmobile.commands.CommandResult
 import com.ersaz.hermesmobile.commands.Commands
 import com.ersaz.hermesmobile.core.parseArgs
+import com.ersaz.hermesmobile.stt.StreamText
+import com.ersaz.hermesmobile.stt.VoiceInput
+import com.ersaz.hermesmobile.stt.VoiceLang
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -67,6 +70,48 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     var contextPct by mutableStateOf(0); private set
     var input by mutableStateOf("")
     val pendingImages = mutableStateListOf<String>()
+    val pendingFiles = mutableStateListOf<Attachment>()
+
+    // --- voice dictation (Google online speech engine, ported from Sokhan) ---
+    var voiceLang by mutableStateOf(VoiceLang.fromCode(runtime.settings.voiceLang)); private set
+    var listening by mutableStateOf(false); private set
+    var voiceError by mutableStateOf<String?>(null)
+    private var voiceBase = ""
+    private var voice: VoiceInput? = null
+
+    fun cycleVoiceLang() {
+        if (listening) return
+        voiceLang = voiceLang.next()
+        runtime.settings.voiceLang = voiceLang.code
+    }
+
+    private fun joinWithBase(extra: String): String =
+        if (extra.isBlank()) voiceBase else if (voiceBase.isBlank()) extra else voiceBase.trimEnd() + " " + extra
+
+    /** Mic button: tap to start dictating into the message box, tap again to stop. */
+    fun toggleVoice() {
+        val v = voice
+        if (listening && v != null) { v.stop(); return }
+        voiceError = null
+        voiceBase = input
+        val lang = voiceLang
+        val engine = VoiceInput(
+            onText = { t: StreamText -> ui { input = joinWithBase(VoiceInput.preview(t, lang)) } },
+            onDone = { final, err ->
+                ui {
+                    if (final.isNotBlank()) input = joinWithBase(final)
+                    if (err != null) voiceError = err
+                    listening = false
+                    voice = null
+                }
+            },
+        )
+        voice = engine
+        listening = true
+        engine.start(lang)
+    }
+
+    override fun onCleared() { voice?.cancel(); super.onCleared() }
     private var job: Job? = null
     private var seq = 0
     private fun k() = "i${seq++}"
@@ -160,11 +205,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     fun send() {
         val text = input.trim()
         val images = pendingImages.toList()
-        if (text.isEmpty() && images.isEmpty()) return
+        val files = pendingFiles.toList()
+        if (text.isEmpty() && images.isEmpty() && files.isEmpty()) return
+        if (listening) voice?.stop()
         input = ""
         pendingImages.clear()
+        pendingFiles.clear()
         viewModelScope.launch {
-            if (images.isEmpty() && text.startsWith("/")) {
+            if (images.isEmpty() && files.isEmpty() && text.startsWith("/")) {
                 val beforeAgent = agent
                 val beforeCount = agent.session.messages.size
                 items += ChatItem.User(k(), text, emptyList())
@@ -190,7 +238,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 // Hermes "busy" default: a new message interrupts the running turn.
                 agent.interrupt(); job?.join()
             }
-            runTurn(text.ifEmpty { "What's in this image?" }, images, showUser = true)
+            val lead = text.ifEmpty { if (images.isNotEmpty()) "What's in this image?" else "Please look at the attached file(s)." }
+            runTurn(lead + attachmentNote(files), images, showUser = true)
         }
     }
 

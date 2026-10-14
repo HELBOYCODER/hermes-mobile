@@ -66,6 +66,7 @@ class HermesRuntime(val app: Application) {
             val soul = File(hermesHome, "SOUL.md")
             if (!soul.exists()) soul.writeText(com.ersaz.hermesmobile.agent.PromptBuilder.DEFAULT_IDENTITY + "\n")
             if (sandbox.payloadAvailable()) sandbox.ensureInstalled()
+            runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
             bridge.start()
         }
     }

@@ -34,6 +34,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -47,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -67,24 +71,34 @@ import com.ersaz.hermesmobile.ui.theme.LocalSkin
 @Composable
 fun SectionTitle(text: String) {
     val skin = LocalSkin.current
-    Text(text, color = skin.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+    Text(text, color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(top = 26.dp, bottom = 6.dp))
 }
 
 @Composable
 fun Hint(text: String) {
-    Text(text, color = LocalSkin.current.dim, fontSize = 12.5.sp, modifier = Modifier.padding(bottom = 6.dp))
+    Text(text, color = LocalSkin.current.dim, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.padding(bottom = 8.dp))
 }
 
+/** Flat filled text field: no outline, soft surface fill (Hermes Desktop style). */
 @Composable
 fun Field(label: String, value: String, secret: Boolean = false, number: Boolean = false, singleLine: Boolean = true, onChange: (String) -> Unit) {
+    val skin = LocalSkin.current
     var v by remember(value) { mutableStateOf(value) }
-    OutlinedTextField(
+    val none = Color.Transparent
+    TextField(
         value = v,
         onValueChange = { v = it; onChange(it) },
         label = { Text(label) },
         singleLine = singleLine,
         visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Number else KeyboardType.Text),
+        shape = RoundedCornerShape(14.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = skin.surface, unfocusedContainerColor = skin.surface, disabledContainerColor = skin.surface,
+            focusedIndicatorColor = none, unfocusedIndicatorColor = none, disabledIndicatorColor = none, errorIndicatorColor = none,
+            focusedTextColor = skin.text, unfocusedTextColor = skin.text, cursorColor = skin.accent,
+            focusedLabelColor = skin.accent, unfocusedLabelColor = skin.dim,
+        ),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     )
 }
@@ -92,19 +106,25 @@ fun Field(label: String, value: String, secret: Boolean = false, number: Boolean
 @Composable
 fun Toggle(label: String, checked: Boolean, hint: String? = null, onChange: (Boolean) -> Unit) {
     val skin = LocalSkin.current
-    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, color = skin.text, fontSize = 15.sp)
             hint?.let { Text(it, color = skin.dim, fontSize = 12.sp) }
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(
+            checked = checked, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = skin.accent, checkedThumbColor = skin.bg, checkedBorderColor = Color.Transparent,
+                uncheckedTrackColor = skin.selection, uncheckedThumbColor = skin.dim, uncheckedBorderColor = Color.Transparent,
+            ),
+        )
     }
 }
 
 @Composable
 fun Card(content: @Composable () -> Unit) {
     val skin = LocalSkin.current
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(skin.surface, RoundedCornerShape(10.dp)).padding(12.dp)) { content() }
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(skin.surface, RoundedCornerShape(14.dp)).padding(14.dp)) { content() }
 }
 
 // ------------------------------------------------------------------ sessions
