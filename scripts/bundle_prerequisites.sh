@@ -10,7 +10,7 @@ ALPINE_BRANCH="${ALPINE_BRANCH:-v3.21}"
 case "$(uname -m)" in x86_64) HOST_ARCH=x86_64 ;; aarch64|arm64) HOST_ARCH=aarch64 ;; *) echo 'Unsupported build host' >&2; exit 1 ;; esac
 REPO="https://dl-cdn.alpinelinux.org/alpine/$ALPINE_BRANCH/main/$HOST_ARCH"
 curl -fsSL --retry 3 "$REPO/APKINDEX.tar.gz" -o "$WORK/index.tar.gz"
-VERSION="$(tar -xOf "$WORK/index.tar.gz" APKINDEX | awk '/^P:apk-tools-static$/ {found=1; next} found && /^V:/ {print substr($0,3); exit}')"
+VERSION="$(tar -xOf "$WORK/index.tar.gz" APKINDEX | awk '/^P:apk-tools-static$/ {found=1; next} found && /^V:/ {print substr($0,3); found=0}')"
 test -n "$VERSION"
 curl -fsSL --retry 3 "$REPO/apk-tools-static-$VERSION.apk" -o "$WORK/apk.apk"
 tar --warning=no-unknown-keyword -xzf "$WORK/apk.apk" -C "$WORK" sbin/apk.static
