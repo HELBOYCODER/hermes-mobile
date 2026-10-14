@@ -71,6 +71,7 @@ tasks.register('checkSandboxPayload') {
         def missing = ['libproot.so', 'libproot-loader.so', 'libtalloc.so', 'libandroid-shmem.so']
                 .findAll { !new File(jni, it).exists() }
         if (!rootfs.exists()) missing << 'assets/sandbox/alpine-rootfs.bin'
+        if (!file('src/main/assets/sandbox/router-runtime.bin').exists()) missing << 'assets/sandbox/router-runtime.bin'
         if (!missing.isEmpty()) {
             throw new GradleException("Sandbox payload missing: ${missing}. Run ./scripts/fetch_sandbox.sh first.")
         }

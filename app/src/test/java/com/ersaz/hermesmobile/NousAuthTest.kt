@@ -37,6 +37,17 @@ private fun jwt(vararg claims: Pair<String, Any>): String {
 }
 
 class NousAuthTest {
+    @org.junit.Test(expected = com.ersaz.hermesmobile.auth.NousAuthException::class)
+    fun hermesRejectsApiKeyOnlyWithoutAccountLogin() {
+        NousPortal.authenticatedEndpoint(false, NousPortal.INFERENCE)
+    }
+
+    @org.junit.Test
+    fun loggedInHermesOnlyUsesNousEndpoints() {
+        org.junit.Assert.assertEquals(NousPortal.WELCOME, NousPortal.authenticatedEndpoint(true, NousPortal.WELCOME))
+        org.junit.Assert.assertEquals(NousPortal.INFERENCE, NousPortal.authenticatedEndpoint(true, "https://other.example/v1"))
+    }
+
     private fun server(vararg responses: MockResponse) = MockWebServer().apply { responses.forEach { enqueue(it) }; start() }
     private fun json(code: Int, body: String) = MockResponse().setResponseCode(code).setHeader("Content-Type", "application/json").setBody(body)
 

@@ -105,4 +105,5 @@ jobs:
             Immediate voice pause, resume into the existing draft, and send without waiting for the speech server.
             Bundled ARM64 Linux prerequisites and one-tap 9Router installation/repair.
             Includes the previously unmerged Bot Mode and UI changes.
-            ARM64 only. Voice recognition and router package installation require internet.
+            ARM64 only. The full local 9Router server and SQLite runtime are bundled. Online models and speech recognition require internet.
+            Nous/Hermes uses account login only, with return to the app after approval.

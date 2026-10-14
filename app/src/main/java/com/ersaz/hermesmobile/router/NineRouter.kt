@@ -43,7 +43,7 @@ class NineRouter(private val rt: HermesRuntime) {
     private fun say(t: String) { _message.value = t; appendLog("\n▸ $t\n") }
 
     /** The one-tap flow: install → start → connect free providers → select 9Router in Hermes → fetch free models. */
-    suspend fun installAndSetup(): Boolean = lock.withLock {
+    suspend fun installAndSetup(selectAsProvider: Boolean = true): Boolean = lock.withLock {
         if (!rt.sandbox.isInstalled() && !rt.sandbox.ensureInstalled()) { fail("The Linux sandbox is not ready yet."); return false }
         // Validate and repair dependencies even when an older installation exists.
         _state.value = State.INSTALLING
@@ -59,17 +59,13 @@ class NineRouter(private val rt: HermesRuntime) {
             fail("Prerequisite setup failed (exit ${prerequisites.exitCode}). Check the connection and retry; your data is kept.")
             return false
         }
-        if (!installed()) {
-            _state.value = State.INSTALLING
-            say("Installing Node.js and 9Router (this takes a few minutes)…")
-            val r = rt.sandbox.exec(
-                "npm install -g 9router 2>&1 && command -v 9router", timeoutSec = 1800,
-                onOutput = { appendLog(it) },
-            )
-            if (r.exitCode != 0 || !installed()) { fail("Install failed (exit ${r.exitCode}). See the log below."); return false }
+        say("Installing bundled 9Router server and SQLite runtime…")
+        if (!rt.sandbox.installBundledRouter()) {
+            fail("The bundled router could not be installed. Check free storage and retry.")
+            return false
         }
         try {
-            startLocked() && configureLocked(selectAsProvider = true)
+            startLocked() && configureLocked(selectAsProvider)
         } catch (e: kotlinx.coroutines.CancellationException) {
             proc?.let { rt.processes.kill(it.id) }; proc = null
             _state.value = State.STOPPED
@@ -88,8 +84,12 @@ class NineRouter(private val rt: HermesRuntime) {
         _state.value = State.STARTING
         if (s.routerPassword.isBlank()) s.routerPassword = UUID.randomUUID().toString().replace("-", "").take(20)
         say("Starting 9Router on ${s.routerHost}:${s.routerPort}…")
-        val cmd = "INITIAL_PASSWORD=${Sandbox.shQuote(s.routerPassword)} exec 9router --no-browser --skip-update " +
-            "-H ${Sandbox.shQuote(s.routerHost)} -p ${s.routerPort}"
+        val routerDir = "/usr/lib/node_modules/9router"
+        val nodePath = "/usr/lib/hermes-9router-runtime/node_modules:$routerDir/app/node_modules:$routerDir/node_modules"
+        val cmd = "cd $routerDir/app && " +
+            "INITIAL_PASSWORD=${Sandbox.shQuote(s.routerPassword)} " +
+            "NODE_PATH=${Sandbox.shQuote(nodePath)} HOSTNAME=${Sandbox.shQuote(s.routerHost)} PORT=${s.routerPort} " +
+            "exec node --dns-result-order=ipv4first --max-old-space-size=512 $routerDir/app/custom-server.js"
         proc?.let { rt.processes.kill(it.id) }
         proc = rt.processes.start(cmd, "/root")
         // First launch installs 9Router's own runtime dependencies, so give it time.
@@ -116,8 +116,8 @@ class NineRouter(private val rt: HermesRuntime) {
 
     /** Auto-start with the app, if installed and enabled. */
     fun autoStartIfNeeded() {
-        if (!s.routerAutoStart || !installed()) return
-        rt.scope.launch(Dispatchers.IO) { if (start()) refreshFreeModels(selectAsProvider = false) }
+        if (!s.routerAutoStart) return
+        rt.scope.launch(Dispatchers.IO) { installAndSetup(selectAsProvider = false) }
     }
 
     suspend fun refreshFreeModels(selectAsProvider: Boolean = false): Boolean = lock.withLock { configureLocked(selectAsProvider) }
@@ -147,7 +147,7 @@ class NineRouter(private val rt: HermesRuntime) {
                 val err = a.probe(s.routerKey, m)
                 if (err == null) { working = m; break } else lastErr = err
             }
-            if (selectAsProvider || !s.routerConfigured) {
+            if (selectAsProvider) {
                 rt.modelStore.ensureCurrent("Previous")
                 val pick = working ?: free.first()
                 rt.modelStore.select(ModelProfile("9Router", "9router", apiUrl, s.routerKey, pick, true, "9router"))

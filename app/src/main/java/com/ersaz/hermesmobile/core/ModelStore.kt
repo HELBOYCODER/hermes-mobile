@@ -59,8 +59,8 @@ class ModelStore(private val settings: Settings) {
     /** Make [p] the model used by chat. */
     fun select(p: ModelProfile) {
         settings.provider = p.providerId
-        settings.baseUrl = p.baseUrl
-        settings.apiKey = p.apiKey
+        settings.baseUrl = if (p.providerId == "nous") com.ersaz.hermesmobile.auth.NousPortal.safeInferenceUrl(p.baseUrl) ?: com.ersaz.hermesmobile.auth.NousPortal.INFERENCE else p.baseUrl
+        settings.apiKey = if (p.providerId == "nous") "" else p.apiKey
         settings.model = p.model
     }
 

@@ -25,6 +25,20 @@ SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}" "$WORK/sbin
 for executable in node npm python3 git curl; do
   test -e "$WORK/rootfs/usr/bin/$executable" || test -L "$WORK/rootfs/usr/bin/$executable"
 done
+# Bundle the pinned server, its JS dependencies and both SQLite engines. Install
+# scripts are skipped on the host; better-sqlite3 ships the ARM64 musl prebuild.
+command -v npm >/dev/null
+npm install --global --prefix "$WORK/rootfs/usr" --ignore-scripts --no-audit --no-fund 9router@0.5.99
+npm install --prefix "$WORK/rootfs/usr/lib/hermes-9router-runtime" --ignore-scripts --no-audit --no-fund \
+  better-sqlite3@13.0.3 sql.js@1.14.1
+test -f "$WORK/rootfs/usr/lib/node_modules/9router/app/custom-server.js"
+test -f "$WORK/rootfs/usr/lib/hermes-9router-runtime/node_modules/better-sqlite3/prebuilds/linuxmusl-arm64.node"
+test -f "$WORK/rootfs/usr/lib/hermes-9router-runtime/node_modules/sql.js/dist/sql-wasm.wasm"
+# A separate archive can update the router on existing phones without deleting
+# their Linux rootfs, user files or /root/.9router account/database settings.
+tar --numeric-owner --owner=0 --group=0 -czf "$(dirname "$ASSET")/router-runtime.bin" -C "$WORK/rootfs" \
+  usr/bin/9router usr/lib/node_modules/9router usr/lib/hermes-9router-runtime
+rm -rf "$WORK/rootfs/usr/bin/9router" "$WORK/rootfs/usr/lib/node_modules/9router" "$WORK/rootfs/usr/lib/hermes-9router-runtime"
 printf '1\n' > "$WORK/rootfs/etc/hermes-prerequisites-version"
 tar --numeric-owner --owner=0 --group=0 -czf "$ASSET" -C "$WORK/rootfs" .
 echo 'Bundled ARM64 prerequisites into sandbox payload'

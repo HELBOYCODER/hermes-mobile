@@ -40,7 +40,7 @@ fun OnboardingScreen(rt: HermesRuntime, done: () -> Unit) {
         SectionTitle("Set up Hermes")
         Hint("Easiest: sign in with your Nous Portal account. Free accounts get free models automatically — no API key needed. Or pick another provider and paste its key; keys stay on this phone.")
         NousLoginCard(rt)
-        SectionTitle("…or use an API key")
+        SectionTitle("Provider (Hermes uses account login)")
         Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
             val p = Providers.byId(id)
             s.provider = id
@@ -51,8 +51,10 @@ fun OnboardingScreen(rt: HermesRuntime, done: () -> Unit) {
             refresh++
         }
         key(refresh) {
-            Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-            if (!rt.usesNousLogin()) Field("API key", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            if (s.provider != "nous") {
+                Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
+                Field("API key", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            }
             Field("Model", s.model) { s.model = it.trim() }
         }
         Spacer(Modifier.height(12.dp))

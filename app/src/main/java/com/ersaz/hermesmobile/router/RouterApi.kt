@@ -72,7 +72,7 @@ class RouterApi(private val http: OkHttpClient, val baseUrl: String) {
     }
 
     suspend fun isUp(): Boolean = withContext(Dispatchers.IO) {
-        try { http.newCall(Request.Builder().url("$baseUrl/v1/models").build()).execute().use { it.code in 200..499 } }
+        try { http.newCall(Request.Builder().url("$baseUrl/api/auth/status").build()).execute().use { it.isSuccessful } }
         catch (_: Exception) { false }
     }
 

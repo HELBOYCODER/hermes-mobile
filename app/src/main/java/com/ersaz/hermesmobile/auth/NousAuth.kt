@@ -25,6 +25,11 @@ object NousPortal {
     const val DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
     private val inferenceHosts = setOf("inference-api.nousresearch.com", "welcome-api.nousresearch.com")
 
+    fun authenticatedEndpoint(signedIn: Boolean, preferred: String): String {
+        if (!signedIn) throw NousAuthException("Sign in to Nous Portal in Settings. Hermes uses account login, not an API key.", "login_required")
+        return safeInferenceUrl(preferred) ?: INFERENCE
+    }
+
     /** The portal may tell us where inference lives; never let it redirect a bearer token off Nous hosts. */
     fun safeInferenceUrl(url: String?): String? {
         if (url.isNullOrBlank()) return null

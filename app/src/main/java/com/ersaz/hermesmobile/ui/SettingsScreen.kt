@@ -149,7 +149,7 @@ fun SettingsScreen(rt: HermesRuntime) {
 
         SectionTitle("9Router — free AI router")
         Hint("Runs 9Router inside Hermes' Linux sandbox so every app on this phone can use one OpenAI-compatible endpoint " +
-            "(${s.routerHost}:${s.routerPort}) while Hermes is open. One tap installs it, starts it, makes it Hermes' provider and fetches the free models.")
+            "(${s.routerHost}:${s.routerPort}) while Hermes is open. Its server and runtime are bundled; connect it to select 9Router and fetch free models.")
         val rState by rt.router.state.collectAsState()
         val rMsg by rt.router.message.collectAsState()
         val rLog by rt.router.log.collectAsState()
@@ -222,10 +222,10 @@ fun SettingsScreen(rt: HermesRuntime) {
         key(refresh) {
             val nousLogin = s.provider == "nous"
             if (nousLogin) NousLoginCard(rt)
-            Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-            if (!rt.usesNousLogin()) {
-                Field(if (nousLogin) "…or a Nous Portal API key" else "API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
-            }
+            if (!nousLogin) {
+                Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
+                Field("API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            } else Hint("Hermes connects through Nous Portal account login and returns to this app after approval.")
             Field("Model", s.model) { s.model = it.trim() }
         }
         var pickModel by remember { mutableStateOf(false) }

@@ -94,7 +94,9 @@ class HermesRuntime(val app: Application) {
     fun usesNousLogin(): Boolean = settings.provider == "nous" && nousAuth.signedIn
 
     fun llmClient(): LlmClient =
-        if (usesNousLogin()) LlmClient(http, settings.baseUrl, "", settings.provider, nousKeyProvider)
+        if (settings.provider == "nous") LlmClient(http,
+            com.ersaz.hermesmobile.auth.NousPortal.authenticatedEndpoint(nousAuth.signedIn, settings.baseUrl),
+            "", "nous", nousKeyProvider)
         else LlmClient(http, settings.baseUrl, settings.apiKey, settings.provider)
 
     /** Best-effort return to the app after the browser step of a login (blocked by Android 10+ in the background; the notification covers that). */

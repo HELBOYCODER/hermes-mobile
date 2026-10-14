@@ -111,6 +111,24 @@ class Sandbox(private val context: Context, private val settings: Settings) {
         }
     }
 
+    /** Upgrade bundled router code/runtime in place; leave the user's router database alone. */
+    suspend fun installBundledRouter(): Boolean = withContext(Dispatchers.IO) {
+        installLock.withLock {
+            val stamp = File(baseDir, ".router-build")
+            val version = com.ersaz.hermesmobile.BuildConfig.VERSION_CODE.toString()
+            val server = File(rootfs, "usr/lib/node_modules/9router/app/custom-server.js")
+            if (stamp.exists() && stamp.readText() == version && server.exists()) return@withLock true
+            try {
+                context.assets.open("sandbox/router-runtime.bin").use { TarExtractor.extract(it, rootfs) }
+                check(server.exists()) { "Bundled 9Router server missing" }
+                stamp.writeText(version)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
     suspend fun reinstall(): Boolean {
         marker.delete()
         return ensureInstalled()

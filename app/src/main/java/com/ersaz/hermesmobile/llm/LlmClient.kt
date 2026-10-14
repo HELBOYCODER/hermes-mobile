@@ -21,7 +21,7 @@ data class Provider(val id: String, val label: String, val baseUrl: String, val 
 
 object Providers {
     val all = listOf(
-        Provider("nous", "Nous Portal (sign in — free models included)", "https://inference-api.nousresearch.com/v1", "Hermes-4-405B", "Nous Portal API key"),
+        Provider("nous", "Nous Portal (sign in — free models included)", "https://inference-api.nousresearch.com/v1", "Hermes-4-405B", "account login only"),
         Provider("openrouter", "OpenRouter (200+ models)", "https://openrouter.ai/api/v1", "nousresearch/hermes-4-405b", "sk-or-…"),
         Provider("openai", "OpenAI", "https://api.openai.com/v1", "gpt-4.1", "sk-…"),
         Provider("anthropic", "Anthropic (OpenAI-compatible)", "https://api.anthropic.com/v1", "claude-sonnet-4-5", "sk-ant-…"),

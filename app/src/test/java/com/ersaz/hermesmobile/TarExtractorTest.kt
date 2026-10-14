@@ -25,6 +25,23 @@ class TarExtractorTest {
     }
 
     @Test
+    fun bundledRouterContainsServerAndArm64RuntimeWithoutUserCredentials() {
+        val asset = File("src/main/assets/sandbox/router-runtime.bin")
+        assertTrue("Router must be bundled in release builds", asset.exists())
+        val dest = Files.createTempDirectory("hermes-router").toFile()
+        try {
+            asset.inputStream().use { TarExtractor.extract(it, dest, jvmFs) }
+            assertTrue(File(dest, "usr/lib/node_modules/9router/app/custom-server.js").isFile)
+            val native = File(dest, "usr/lib/hermes-9router-runtime/node_modules/better-sqlite3/prebuilds/linuxmusl-arm64.node")
+            val header = native.inputStream().use { input -> ByteArray(20).also { assertEquals(20, input.read(it)) } }
+            assertEquals(0x7f, header[0].toInt())
+            assertEquals(183, (header[18].toInt() and 255) or ((header[19].toInt() and 255) shl 8))
+            assertTrue(File(dest, "usr/lib/hermes-9router-runtime/node_modules/sql.js/dist/sql-wasm.wasm").isFile)
+            assertTrue("No user router database in application payload", !File(dest, "root/.9router/db.json").exists())
+        } finally { dest.deleteRecursively() }
+    }
+
+    @Test
     fun extractsAlpineRootfs() {
         val asset = File("src/main/assets/sandbox/alpine-rootfs.bin")
         assumeTrue("run scripts/fetch_sandbox.sh first", asset.exists())
