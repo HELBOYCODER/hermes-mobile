@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -506,3 +507,4 @@ fun imageDataUri(context: android.content.Context, uri: Uri): String? = runCatch
     scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
     "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
 }.getOrNull()
+
