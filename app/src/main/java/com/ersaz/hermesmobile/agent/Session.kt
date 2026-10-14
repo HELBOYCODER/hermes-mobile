@@ -34,9 +34,12 @@ data class Message(
     val reasoning: String? = null,
     val images: List<String> = emptyList(), // data: URIs or https URLs
     val timestamp: Long = System.currentTimeMillis(),
+    val localId: String = UUID.randomUUID().toString(),
+    val failureReason: String? = null,
 ) {
     fun toJson(): JSONObject {
-        val o = JSONObject().put("role", role).put("content", content).put("ts", timestamp)
+        val o = JSONObject().put("role", role).put("content", content).put("ts", timestamp).put("local_id", localId)
+        failureReason?.let { o.put("failure_reason", it) }
         if (toolCalls.isNotEmpty()) o.put("tool_calls", JSONArray().also { a -> toolCalls.forEach { a.put(it.toJson()) } })
         toolCallId?.let { o.put("tool_call_id", it) }
         name?.let { o.put("name", it) }
@@ -74,6 +77,8 @@ data class Message(
             reasoning = o.optStringOrNull("reasoning"),
             images = o.optJSONArray("images")?.strings() ?: emptyList(),
             timestamp = o.optLong("ts", System.currentTimeMillis()),
+            localId = o.optString("local_id").ifBlank { UUID.randomUUID().toString() },
+            failureReason = o.optStringOrNull("failure_reason"),
         )
     }
 }
@@ -111,6 +116,16 @@ class Session(
         })
         .put("model_override", modelOverride)
         .put("bot_id", botId)
+
+    /** Resume only the most recent failed user turn; preserve history, attachments and completed tools. */
+    fun prepareFailedTurnForRetry(localId: String): Message? {
+        val index = messages.indexOfFirst { it.localId == localId && it.role == "user" && it.failureReason != null }
+        if (index < 0 || messages.drop(index + 1).any { it.role == "user" && !it.content.startsWith("[SYSTEM:") && !it.content.startsWith("[USER STEER") }) return null
+        val failed = messages[index]
+        val retry = failed.copy(failureReason = null)
+        messages[index] = retry
+        return retry
+    }
 
     fun displayTitle(): String = title.ifBlank {
         messages.firstOrNull { it.role == "user" }?.content?.lineSequence()?.firstOrNull()?.take(60)

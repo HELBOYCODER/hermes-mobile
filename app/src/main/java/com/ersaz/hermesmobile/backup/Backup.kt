@@ -46,12 +46,12 @@ object Zips {
  */
 class Backup(private val ctx: Context, private val hermesHome: File) {
     private val secretKeys = setOf("api_key", "nous_access_token", "nous_refresh_token", "telegram_token", "discord_token", "slack_bot_token",
-        "slack_app_token", "tavily_key", "brave_key")
+        "slack_app_token", "tavily_key", "brave_key", "sandbox_env", "github_token", "router_key", "router_password")
 
     fun export(out: OutputStream, includeSecrets: Boolean): Int = ZipOutputStream(out.buffered()).use { zip ->
         val prefs = ctx.getSharedPreferences("hermes_settings", Context.MODE_PRIVATE).all
         val json = JSONObject()
-        prefs.forEach { (k, v) -> if (includeSecrets || k !in secretKeys) json.put(k, v) }
+        prefs.forEach { (k, v) -> if (includeSecrets || k !in secretKeys) json.put(k, if (k == "sandbox_env") com.ersaz.hermesmobile.core.Settings(ctx).sandboxEnv else v) }
         zip.putNextEntry(ZipEntry("settings.json")); zip.write(json.toString(2).toByteArray()); zip.closeEntry()
         // Rebuildable or private caches stay out.
         Zips.zipDir(hermesHome, "hermes", zip) { it.startsWith("audio/") || it.startsWith("browser/") || it.startsWith("exports/") || it.endsWith(".tmp") }
@@ -66,6 +66,10 @@ class Backup(private val ctx: Context, private val hermesHome: File) {
                     val j = JSONObject(String(bytes))
                     val e = ctx.getSharedPreferences("hermes_settings", Context.MODE_PRIVATE).edit()
                     j.keys().forEach { k ->
+                        if (k == "sandbox_env") {
+                            com.ersaz.hermesmobile.core.Settings(ctx).sandboxEnv = j.getString(k)
+                            return@forEach
+                        }
                         when (val v = j.get(k)) {
                             is Boolean -> e.putBoolean(k, v); is Int -> e.putInt(k, v); is Long -> e.putLong(k, v)
                             is Double -> e.putFloat(k, v.toFloat()); is String -> e.putString(k, v)

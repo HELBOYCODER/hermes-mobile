@@ -1,10 +1,10 @@
 # Hermes Mobile | هرمس موبایل
 
-**Android · ARM64 · 2.3.3**
+**Android · ARM64 · 2.3.4**
 
-[**دانلود فایل نصبی / Download APK — 2.3.3**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.3/hermes-mobile-2.3.3-arm64.apk)
+[**دانلود فایل نصبی / Download APK — 2.3.4**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.4/hermes-mobile-2.3.4-arm64.apk)
 
-[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.3.3)
+[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.3.4)
 
 ## فارسی
 
@@ -18,6 +18,12 @@
 4. برای پنل محلی 9Router، برنامه را باز نگه دارید و به `http://127.0.0.1:20128` بروید. رمز پنل در **Settings → 9Router** قابل نمایش و کپی است.
 
 اگر اندروید به‌دلیل تفاوت امضای نسخهٔ قبلی اجازهٔ به‌روزرسانی نداد، پیش از حذف نسخهٔ قبلی از اطلاعات مهم خود پشتیبان بگیرید.
+
+### تغییرات این نسخه
+
+- جهت و تراز متن فارسی و انگلیسی بر اساس هر پاراگراف؛ بلوک کد چپ‌به‌راست می‌ماند.
+- بخش Environment بالای تنظیمات، با افزودن/ویرایش/حذف و مقدارهای پنهان و رمزگذاری‌شده.
+- کپی پیام کاربر و تلاش مجدد آخرین پیام ناموفق با حفظ پیوست‌ها.
 
 ### امکانات
 
@@ -33,7 +39,7 @@
 
 ### وضعیت OpenCode Free
 
-در نسخهٔ ۲.۳.۳ کاتالوگ OpenCode Free از OpenCode Zen جدا شده است، اما نمایش مدل در فهرست به معنی قابل استفاده بودن آن نیست. خطای گزارش‌شدهٔ `403 FreeTierError` می‌گوید سرویس رایگان فقط از داخل OpenCode قابل استفاده است. موفقیت درخواست واقعی این مدل‌ها از هرمس تأیید نشده است؛ این نسخه رفع آن محدودیت را تضمین نمی‌کند.
+در نسخهٔ ۲.۳.۴ کاتالوگ OpenCode Free از OpenCode Zen جدا شده است، اما نمایش مدل در فهرست به معنی قابل استفاده بودن آن نیست. خطای گزارش‌شدهٔ `403 FreeTierError` می‌گوید سرویس رایگان فقط از داخل OpenCode قابل استفاده است. موفقیت درخواست واقعی این مدل‌ها از هرمس تأیید نشده است؛ این نسخه رفع آن محدودیت را تضمین نمی‌کند.
 
 ### تصاویر داخل برنامه
 
@@ -52,6 +58,12 @@ Hermes Mobile is an Android app for AI conversations, agent tools, persistent me
 
 If Android rejects an update because of a signing-key mismatch, back up important data before uninstalling the previous app.
 
+### Changes in this version
+
+- Content-based paragraph direction and alignment for Persian and English; code blocks remain LTR.
+- Environment editor at the top of Settings, with masked values and Android Keystore encryption.
+- Copy user messages and retry the latest failed turn with original attachments.
+
 ### Features
 
 - Agent tools, persistent memory, and skills.
@@ -66,7 +78,7 @@ No Termux installation or root access is required. Online models, account login,
 
 ### OpenCode Free status
 
-Version 2.3.3 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
+Version 2.3.4 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
 
 ### In-app screenshots
 
@@ -74,12 +86,5 @@ Real screenshots of this version have not yet been added.
 
 ## Download integrity / صحت فایل
 
-File: `hermes-mobile-2.3.3-arm64.apk`  
-Size: **181,757,807 bytes**  
-SHA-256:
-
-```text
-3f7c5f724e8e538e90278643b4c29c58556625fe8b96af876cd212d01f8aacea
-```
-
-This page links only to the existing 2.3.3 installer. Documentation updates do not represent a new APK release.
+File: `hermes-mobile-2.3.4-arm64.apk`
+The APK is built and published by GitHub Actions. See the release asset for its SHA-256 digest.

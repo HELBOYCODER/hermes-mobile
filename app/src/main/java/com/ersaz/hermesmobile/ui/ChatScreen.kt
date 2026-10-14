@@ -78,6 +78,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -142,7 +143,7 @@ fun ChatScreen(vm: ChatViewModel) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         ) {
             if (vm.items.isEmpty()) item { Banner(vm) }
-            items(vm.items, key = { it.key }) { item -> ChatRow(item) }
+            items(vm.items, key = { it.key }) { item -> ChatRow(item, vm) }
             if (vm.busy) item { Spinner() }
         }
 
@@ -248,7 +249,7 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
             BasicTextField(
                 value = vm.input,
                 onValueChange = { if (vm.listening || vm.transcribing) vm.pauseVoice(); vm.input = it },
-                textStyle = TextStyle(color = skin.text, fontSize = 16.sp, lineHeight = 22.sp),
+                textStyle = TextStyle(color = skin.text, fontSize = 16.sp, lineHeight = 22.sp, textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start),
                 cursorBrush = SolidColor(skin.accent),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp, max = 180.dp).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -403,7 +404,7 @@ fun Banner(vm: ChatViewModel) {
 }
 
 @Composable
-private fun ChatRow(item: ChatItem) {
+private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
     val skin = LocalSkin.current
     when (item) {
         is ChatItem.User -> Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp), horizontalArrangement = Arrangement.End) {
@@ -412,7 +413,17 @@ private fun ChatRow(item: ChatItem) {
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 item.images.forEach { DataImage(it) }
-                if (item.text.isNotBlank()) Text(item.text, color = skin.text, fontSize = 15.sp, lineHeight = 21.sp)
+                if (item.text.isNotBlank()) Text(item.text, color = skin.text, fontSize = 15.sp, lineHeight = 21.sp,
+                    style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.fillMaxWidth())
+                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                item.failure?.let { failure ->
+                    Text(failure, color = skin.error, fontSize = 12.sp,
+                        style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+                Row {
+                    TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }) { Text("کپی · Copy", fontSize = 12.sp) }
+                    if (item.failure != null) TextButton(enabled = vm.canRetry(item), onClick = { vm.retryFailed(item) }) { Text("تلاش مجدد · Retry", fontSize = 12.sp) }
+                }
             }
         }
         is ChatItem.Assistant -> Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -423,6 +434,7 @@ private fun ChatRow(item: ChatItem) {
                     color = skin.dim, fontSize = 12.sp, modifier = Modifier.clickable { open = !open }.padding(bottom = 4.dp),
                 )
                 if (open) Text(item.reasoning, color = skin.dim, fontSize = 12.sp, lineHeight = 17.sp,
+                    style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start),
                     modifier = Modifier.padding(start = 10.dp, bottom = 6.dp))
             }
             if (item.text.isNotBlank() || item.streaming) {
@@ -462,7 +474,7 @@ private fun ChatRow(item: ChatItem) {
                 }
             }
         }
-        is ChatItem.Info -> Text(item.text, color = if (item.isError) skin.error else skin.label, fontSize = 13.sp,
+        is ChatItem.Info -> Text(item.text, style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), color = if (item.isError) skin.error else skin.label, fontSize = 13.sp,
             fontFamily = if (item.text.lines().size > 2) FontFamily.Monospace else FontFamily.Default,
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(skin.surface).padding(12.dp))
         is ChatItem.Media -> {

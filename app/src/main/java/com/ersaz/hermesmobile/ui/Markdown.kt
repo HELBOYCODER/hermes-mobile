@@ -25,6 +25,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -41,21 +43,22 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
         Column(modifier) {
             for (b in blocks) {
                 when {
-                    b.code -> Column(
+                    b.code -> androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) { Column(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp)
                             .background(skin.surface, RoundedCornerShape(8.dp)).padding(10.dp)
                     ) {
                         if (b.lang.isNotBlank()) Text(b.lang, color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                         Row(Modifier.horizontalScroll(rememberScrollState())) {
-                            Text(b.text, color = skin.text, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 17.sp)
+                            Text(b.text, style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left), color = skin.text, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 17.sp)
                         }
+                    }
                     }
                     b.image != null -> MarkdownImage(b.image.first, b.image.second)
                     b.table != null -> MarkdownTable(b.table)
                     else -> {
                         val annotated = inline(b.text, skin.accent, skin.label, skin.surface)
                         androidx.compose.foundation.text.ClickableText(
-                            annotated, style = androidx.compose.ui.text.TextStyle(color = skin.text, fontSize = 15.sp, lineHeight = 21.sp),
+                            annotated, modifier = Modifier.fillMaxWidth(), style = androidx.compose.ui.text.TextStyle(color = skin.text, fontSize = 15.sp, lineHeight = 21.sp, textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start),
                             onClick = { off -> annotated.getStringAnnotations("URL", off, off).firstOrNull()?.let { runCatching { uri.openUri(it.item) } } },
                         )
                     }
@@ -130,7 +133,7 @@ private fun MarkdownTable(rows: List<List<String>>) {
         for (c in 0 until cols) {
             Column(Modifier.background(if (c % 2 == 0) skin.surface else skin.surface.copy(alpha = 0.55f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
                 rows.forEachIndexed { r, row ->
-                    Text(inline(row.getOrElse(c) { "" }, skin.accent, skin.label, skin.surface), color = if (r == 0) skin.title else skin.text,
+                    Text(inline(row.getOrElse(c) { "" }, skin.accent, skin.label, skin.surface), style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), color = if (r == 0) skin.title else skin.text,
                         fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, fontSize = 13.5.sp, modifier = Modifier.padding(vertical = 3.dp))
                 }
             }

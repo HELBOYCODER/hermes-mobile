@@ -19,6 +19,7 @@ interface AgentListener {
     fun onToolStart(call: ToolCall) {}
     fun onToolEnd(call: ToolCall, result: String, durationMs: Long) {}
     fun onStatus(text: String) {}
+    fun onError(text: String) { onStatus(text) }
     fun onMedia(path: String) {}
     /** Return true to allow a command flagged as dangerous. */
     suspend fun requestApproval(command: String, reason: String): Boolean = false
@@ -66,17 +67,25 @@ class Agent(
         .filter { it.name != "message_bot" || runtime.bots.all().size > 1 } // nobody to message in a one-bot roster
 
     /** Run one user turn through the tool-calling loop. Returns the final assistant text. */
-    suspend fun runTurn(userText: String, images: List<String> = emptyList(), listener: AgentListener): String {
+    suspend fun runTurn(userText: String, images: List<String> = emptyList(), listener: AgentListener, retryMessageId: String? = null): String {
         interrupted = false
         running = true
         if (depth == 0) runtime.botHub.setRunning(botId, true)
+        val userMessage = retryMessageId?.let { id -> session.messages.firstOrNull { it.localId == id && it.role == "user" } }
+            ?: Message("user", userText, images = images)
+        fun markFailure(text: String) {
+            val index = session.messages.indexOfFirst { it.localId == userMessage.localId }
+            if (index >= 0) session.messages[index] = session.messages[index].copy(failureReason = text)
+            runtime.sessions.save(session)
+        }
         try {
             val settings = runtime.settings
+            if (retryMessageId == null) session.messages += userMessage
+            runtime.sessions.save(session)
             if (session.systemPrompt == null) {
                 session.systemPrompt = PromptBuilder.build(runtime, this)
                 session.model = model()
             }
-            session.messages += Message("user", userText, images = images)
             runtime.sessions.save(session)
 
             val client = runtime.llmClient().also { llm = it }
@@ -115,8 +124,9 @@ class Agent(
                 } catch (e: Exception) {
                     if (interrupted) { finalText = "⏹ Interrupted."; break }
                     if (e is CancellationException) throw e
-                    val msg = "⚠️ API error: ${e.message}"
-                    listener.onStatus(msg)
+                    val msg = runtime.settings.redactEnvironment("⚠️ API error: ${e.message}")
+                    markFailure(msg)
+                    listener.onError(msg)
                     finalText = msg
                     break
                 }
@@ -147,7 +157,7 @@ class Agent(
                     } catch (e: Exception) {
                         "{\"error\":\"${(e.message ?: e.toString()).replace("\"", "'")}\"}"
                     }
-                    var capped = com.ersaz.hermesmobile.core.truncateMiddle(result, 60_000)
+                    var capped = com.ersaz.hermesmobile.core.truncateMiddle(runtime.settings.redactEnvironment(result), 60_000)
                     when (loopDetector.record(call.name, call.arguments, capped)) {
                         ToolLoopDetector.Verdict.WARN -> capped += loopDetector.nudge(call.name)
                         ToolLoopDetector.Verdict.STOP -> loopStop = true
@@ -166,6 +176,13 @@ class Agent(
             runtime.sessions.save(session)
             if (session.title.isBlank()) runtime.titleSessionAsync(session)
             return finalText
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val message = runtime.settings.redactEnvironment("⚠️ ${e.message ?: "Request failed"}")
+            markFailure(message)
+            listener.onError(message)
+            return message
         } finally {
             running = false
             llm = null

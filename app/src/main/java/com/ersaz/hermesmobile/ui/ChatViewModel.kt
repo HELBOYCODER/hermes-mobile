@@ -30,7 +30,7 @@ import java.io.File
 sealed class ChatItem {
     abstract val key: String
 
-    class User(override val key: String, val text: String, val images: List<String>) : ChatItem()
+    class User(override val key: String, val text: String, val images: List<String>, val messageId: String? = null, val failure: String? = null) : ChatItem()
 
     class Assistant(override val key: String, text: String = "", reasoning: String = "", streaming: Boolean = false) : ChatItem() {
         var text by mutableStateOf(text)
@@ -204,7 +204,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                         m.content.startsWith("[SYSTEM:") -> null
                         else -> m.content
                     }
-                    if (shown != null) items += ChatItem.User(k(), shown, m.images)
+                    if (shown != null) items += ChatItem.User(k(), shown, m.images, m.localId, m.failureReason)
                 }
                 "assistant" -> {
                     if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank()) items += ChatItem.Assistant(k(), m.content, m.reasoning.orEmpty())
@@ -347,12 +347,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         }
     }
 
-    private fun runTurn(text: String, images: List<String>, showUser: Boolean) {
+    fun retryFailed(item: ChatItem.User) {
+        if (busy) return
+        val failed = item.messageId?.let { agent.session.prepareFailedTurnForRetry(it) } ?: return
+        runtime.sessions.save(agent.session)
+        rebuild()
+        runTurn(failed.content, failed.images, showUser = false, retryMessageId = failed.localId)
+    }
+
+    fun canRetry(item: ChatItem.User): Boolean = !busy && item.failure != null &&
+        agent.session.messages.lastOrNull { it.role == "user" && !it.content.startsWith("[SYSTEM:") && !it.content.startsWith("[USER STEER") }?.localId == item.messageId
+
+    private fun runTurn(text: String, images: List<String>, showUser: Boolean, retryMessageId: String? = null) {
         if (showUser) items += ChatItem.User(k(), text, images)
         busy = true
         status = ""
         val a = agent
         job = viewModelScope.launch {
+            var failed = false
             var current: ChatItem.Assistant? = null
             val calls = mutableMapOf<String, ChatItem.Tool>()
             fun assistant(): ChatItem.Assistant = current ?: ChatItem.Assistant(k(), streaming = true).also { current = it; items += it }
@@ -368,6 +380,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                     calls[call.id]?.let { it.result = result; it.durationMs = durationMs }
                 }
                 override fun onStatus(text: String) = ui { items += ChatItem.Info(k(), text) }
+                override fun onError(text: String) = ui { failed = true; current?.streaming = false }
                 override fun onMedia(path: String) = ui {
                     items += ChatItem.Media(k(), path)
                     runtime.speech.play(File(path))
@@ -386,8 +399,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 }
             }
             try {
-                val result = a.runTurn(text, images, listener)
+                val result = a.runTurn(text, images, listener, retryMessageId)
                 ui {
+                    if (failed) { rebuild(); return@ui }
                     val cur = current
                     if (cur != null) { cur.streaming = false; if (cur.text.isBlank() && result.isNotBlank()) cur.text = result }
                     else if (result.isNotBlank() && items.lastOrNull() !is ChatItem.Assistant) items += ChatItem.Assistant(k(), result)
