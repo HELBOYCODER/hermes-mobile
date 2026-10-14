@@ -39,8 +39,9 @@ class CronRunner(private val rt: HermesRuntime) {
         }
         rt.scope.launch(Dispatchers.IO) {
             try {
-                val session = Session(source = "cron", title = "⏰ ${job.name}", chatKey = job.origin)
-                val agent = Agent(rt, session, "cron")
+                val bot = job.botId?.let { rt.bots.get(it) }
+                val session = Session(source = "cron", title = "⏰ ${job.name}", chatKey = job.origin, botId = bot?.id)
+                val agent = if (bot != null) rt.botHub.agentFor(bot, session, "cron") else Agent(rt, session, "cron")
                 val skillText = job.skills.mapNotNull { rt.skills.find(it) }.joinToString("\n\n") { s ->
                     "[Loaded skill: ${s.name}]\n" + s.file.readText()
                 }
@@ -69,10 +70,11 @@ class CronRunner(private val rt: HermesRuntime) {
             "origin", "" -> job.origin ?: "local"
             else -> job.deliver
         }
+        val who = job.botId?.let { rt.bots.get(it)?.name } ?: "Hermes"
         if (target == "local" || target.startsWith("app") || target.startsWith("terminal")) {
-            rt.notify("Hermes · ${job.name}", text)
+            rt.notify("$who · ${job.name}", text)
             return
         }
-        rt.gateway.sendTo(target, text).onFailure { rt.notify("Hermes · ${job.name}", text) }
+        rt.gateway.sendTo(target, text).onFailure { rt.notify("$who · ${job.name}", text) }
     }
 }

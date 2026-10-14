@@ -39,6 +39,14 @@ class ChatRunner(
 ) : CommandHost {
 
     private var _agent: Agent = loadAgent()
+    private val jobSink = com.ersaz.hermesmobile.agent.jobs.AgentJobs.Sink { text -> job?.join(); startTurn(text, emptyList()) }
+    private var sinkSession: String? = null
+    private fun bindSink() {
+        sinkSession?.let { runtime.agentJobs.unregisterSink(it, jobSink) }
+        sinkSession = _agent.session.id
+        runtime.agentJobs.registerSink(_agent.session.id, jobSink)
+    }
+    init { bindSink() }
     override val agent: Agent get() = _agent
     private var job: Job? = null
     @Volatile private var pendingApproval: CompletableDeferred<Pair<Boolean, Boolean>>? = null
@@ -61,6 +69,7 @@ class ChatRunner(
         runtime.sessions.save(s)
         runtime.gateway.bindSession(chatKey, s.id)
         _agent = Agent(runtime, s, platform)
+        bindSink()
         return _agent
     }
 
@@ -68,6 +77,7 @@ class ChatRunner(
         stop()
         runtime.gateway.bindSession(chatKey, session.id)
         _agent = Agent(runtime, session, platform)
+        bindSink()
         return _agent
     }
 

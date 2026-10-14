@@ -12,6 +12,7 @@ import android.os.Vibrator
 import android.util.Base64
 import com.ersaz.hermesmobile.agent.Agent
 import com.ersaz.hermesmobile.agent.AgentListener
+import com.ersaz.hermesmobile.agent.jobs.SubAgentLimits
 import com.ersaz.hermesmobile.agent.MemoryStore
 import com.ersaz.hermesmobile.agent.Message
 import com.ersaz.hermesmobile.agent.Session
@@ -40,7 +41,7 @@ class MemoryTool : Tool("memory", "memory", MemoryStore.SCHEMA.getString("descri
         val target = args.optString("target", "memory").let { if (it == "user") "user" else "memory" }
         if (target == "memory" && !ctx.runtime.settings.memoryEnabled) return fail("Agent notes memory is disabled; use target='user'.")
         if (target == "user" && !ctx.runtime.settings.userProfileEnabled) return fail("User profile memory is disabled.")
-        return ctx.runtime.memory.apply(target, MemoryStore.opsFrom(args)).toString()
+        return ctx.agent.memory.apply(target, MemoryStore.opsFrom(args)).toString()
     }
 }
 
@@ -223,6 +224,7 @@ class CronjobTool : Tool(
                     name = args.optString("name").ifBlank { prompt.take(40) }, prompt = prompt, schedule = schedule,
                     deliver = args.optString("deliver", "origin"), origin = ctx.session.chatKey ?: "local",
                     skills = args.optJSONArray("skills")?.strings() ?: emptyList(),
+                    botId = ctx.agent.bot?.takeUnless { it.isDefault }?.id,
                 ))
                 ctx.runtime.ensureServiceForCron()
                 ok("job" to job.describe())
@@ -248,44 +250,85 @@ class CronjobTool : Tool(
     }
 }
 
-// ---------------------------------------------------------------- delegate_task
+// ---------------------------------------------------------------- delegate_task (sub-agents)
 
 class DelegateTool : Tool(
     "delegate_task", "delegation",
-    "Spawn isolated subagents with their own fresh conversation (and the shared sandbox) to work on a goal and return a " +
-        "summary. Use for parallelizable or context-heavy subtasks. Pass `tasks` (up to 3) to run several in parallel. " +
-        "Subagents cannot ask the user questions, so give them all needed context.",
+    "Delegate a self-contained task to a sub-agent — its own isolated context and tool loop in a hidden child session, running " +
+        "concurrently with you — and inspect or stop the ones you started. `action` defaults to delegate.\n\n" +
+        "DELEGATE work needing many rounds of exploration (reading many files or pages, trial and error), bulky output you only need a conclusion from, " +
+        "or independent sub-problems that can run in parallel (several calls in one turn). DON'T delegate what you can finish in one or two tool calls, " +
+        "what needs the user's confirmation midway, or work depending on nuances of this conversation. A sub-agent cannot see this conversation and has " +
+        "no memory: write `task` as a complete brief — goal, constraints, where things are, exactly what to return. Only 3 run at once; extras queue.\n\n" +
+        "wait=false (default) returns immediately with status=running and a job_id; the result arrives later as a NEW MESSAGE starting " +
+        "\"[Background task …]\". End your turn when you have nothing else to do — never poll, never promise to report back.",
     "🔀",
 ) {
     override val parameters = obj(
-        "goal" to str("What the subagent should accomplish"),
-        "context" to str("Background, constraints, file paths it needs"),
-        "toolsets" to arr("Toolsets to give it (default: terminal, file, web, skills, todo)", str("toolset")),
-        "tasks" to arr("Parallel tasks: each {goal, context}", obj("goal" to str("Goal"), "context" to str("Context"))),
+        "action" to str("delegate (default) | status | steer | cancel | resume", listOf("delegate", "status", "steer", "cancel", "resume")),
+        "task" to str("action=delegate: the complete self-contained brief."),
+        "agent" to str("action=delegate: which sub-agent runs it (see the roster in the system prompt); omit for the general one."),
+        "model_choice" to str("action=delegate, only for Auto agents. Default same_as_me. default_model = the user's main model when the task clearly needs more capability; sub_model = the user's light/cheap model for simple bounded work.",
+            listOf("same_as_me", "default_model", "sub_model")),
+        "context" to str("action=delegate: raw material to hand over verbatim (file excerpts, errors, paths). Appended to the task."),
+        "max_minutes" to int("action=delegate: wall-clock budget (default 10, max 60). Partial work is returned on timeout."),
+        "wait" to bool("action=delegate: false (default) = background. true = block until finished; only when your next step cannot proceed without it."),
+        "toolsets" to arr("action=delegate: toolsets for the sub-agent (default: terminal, file, web, skills, todo, mcp, browser, device…)", str("toolset")),
+        "job_id" to str("action=status/steer/cancel/resume: job id or prefix (status/resume: omit for all)."),
+        "message" to str("action=steer: the correction, phrased as an instruction to the running sub-agent."),
+        // Legacy shapes kept so older prompts keep working:
+        "goal" to str("Alias of task."),
+        "tasks" to arr("Parallel tasks (each {goal, context}); they run in the background together unless wait=true.", obj("goal" to str("Goal"), "context" to str("Context"))),
     )
 
-    override suspend fun run(args: JSONObject, ctx: ToolContext): String = coroutineScope {
-        if (ctx.agent.depth >= 2) return@coroutineScope fail("Max delegation depth reached")
-        val tasks = args.optJSONArray("tasks")?.objects()?.take(3)
-            ?: listOf(JSONObject().put("goal", args.optString("goal")).put("context", args.optString("context")))
-        if (tasks.all { it.optString("goal").isBlank() }) return@coroutineScope fail("goal is required")
-        val toolsets = args.optJSONArray("toolsets")?.strings()?.toSet() ?: setOf("terminal", "file", "web", "skills", "todo")
-        val results = tasks.mapIndexed { i, t ->
-            async {
-                val child = Session(source = "subagent", title = "↳ " + t.optString("goal").take(50))
-                val agent = Agent(ctx.runtime, child, "subagent", toolsets, ctx.agent.depth + 1)
-                agent.cwd = ctx.agent.cwd
-                ctx.listener.onStatus("🔀 subagent ${i + 1}: ${t.optString("goal").take(80)}")
-                val prompt = "You are a subagent. Complete this goal autonomously and end with a concise report of what you did, " +
-                    "what you found, and any files you changed.\n\nGOAL: ${t.optString("goal")}\n\nCONTEXT: ${t.optString("context").ifBlank { "(none)" }}"
-                val forward = object : AgentListener {
-                    override fun onToolStart(call: ToolCall) = ctx.listener.onStatus("   ↳ [${i + 1}] ${call.name}")
-                }
-                val out = try { agent.runTurn(prompt, emptyList(), forward) } catch (e: Exception) { "Subagent failed: ${e.message}" }
-                JSONObject().put("task", i + 1).put("goal", t.optString("goal")).put("result", out).put("session_id", child.id)
+    override suspend fun run(args: JSONObject, ctx: ToolContext): String {
+        val jobs = ctx.runtime.agentJobs
+        if (!jobs.enabled()) return fail("Sub-agents are turned off in Settings → Sub-agents.")
+        val parent = ctx.agent
+        return when (args.optString("action").ifBlank { "delegate" }) {
+            "delegate" -> delegate(args, ctx)
+            "status" -> {
+                val list = if (args.optString("job_id").isBlank()) jobs.forSession(parent.session.id) else listOfNotNull(jobs.find(parent.session.id, args.optString("job_id")))
+                JSONObject().put("jobs", JSONArray(list.map { it.toJson() })).toString()
             }
-        }.awaitAll()
-        JSONObject().put("results", JSONArray(results)).toString()
+            "steer" -> {
+                val j = jobs.find(parent.session.id, args.optString("job_id")) ?: return fail("No such job")
+                if (args.optString("message").isBlank()) return fail("message is required")
+                if (jobs.steer(j, args.optString("message"))) ok("steered" to j.id) else fail("Job ${j.id} is not running (${j.state.name.lowercase()}).")
+            }
+            "cancel" -> {
+                val j = jobs.find(parent.session.id, args.optString("job_id")) ?: return fail("No such job")
+                if (jobs.cancel(j)) ok("cancelling" to j.id) else fail("Job ${j.id} already finished.")
+            }
+            "resume" -> {
+                val r = jobs.resume(parent, args.optString("job_id").ifBlank { args.optString("child_session_id") })
+                if (r.isEmpty()) fail("Nothing to resume.") else JSONObject().put("resumed", JSONArray(r.map { it.toJson(false) })).toString()
+            }
+            else -> fail("Unknown action")
+        }
+    }
+
+    private suspend fun delegate(args: JSONObject, ctx: ToolContext): String {
+        val jobs = ctx.runtime.agentJobs
+        if (ctx.agent.depth >= 1) return fail("Sub-agents can't delegate further.")
+        val tasks: List<Triple<String, String?, String?>> = args.optJSONArray("tasks")?.objects()?.take(3)?.map {
+            Triple(it.optString("goal").ifBlank { it.optString("task") }, it.optString("context").ifBlank { null }, null)
+        } ?: listOf(Triple(args.optString("task").ifBlank { args.optString("goal") }, args.optString("context").ifBlank { null }, args.optString("agent").ifBlank { null }))
+        if (tasks.all { it.first.isBlank() }) return fail("task is required")
+        val wait = args.optBoolean("wait", false)
+        val toolsets = args.optJSONArray("toolsets")?.strings()?.toSet()
+        val started = tasks.filter { it.first.isNotBlank() }.map { (task, context, agent) ->
+            jobs.start(ctx.agent, task, agent ?: args.optString("agent").ifBlank { null }, args.optString("model_choice").ifBlank { null }, context,
+                args.optInt("max_minutes", SubAgentLimits.DEFAULT_MINUTES), toolsets, wait)
+        }
+        if (!wait) {
+            ctx.listener.onStatus("🔀 started ${started.joinToString { "${it.agentName} (${it.id})" }}")
+            return JSONObject().put("jobs", JSONArray(started.map { it.toJson(false) }))
+                .put("note", "Running in the background. Results will arrive as new messages; keep going or end your turn.").toString()
+        }
+        started.forEach { ctx.listener.onStatus("🔀 sub-agent ${it.agentName} (${it.id}) running…") }
+        started.forEach { jobs.await(it) }
+        return JSONObject().put("results", JSONArray(started.map { it.toJson(true) })).toString()
     }
 }
 
@@ -447,5 +490,41 @@ class AndroidDeviceTool : Tool(
             }
             else -> fail("Unknown action")
         }
+    }
+}
+
+// ---------------------------------------------------------------- message_bot (Bot Mode)
+
+class MessageBotTool : Tool(
+    "message_bot", "bots",
+    "Hand a message or task to another bot in the roster (Bot Mode). It arrives as \"Message from 🤖 <you> (@<you>): …\" in that bot's " +
+        "persistent Bot Chat; the tool waits for its reply and returns it. Use when the user @mentions a bot or the task suits another bot's specialty. " +
+        "Use action='list' to see the roster. Give the bot all the context it needs: it does not see this conversation.",
+    "🤖",
+) {
+    override val parameters = obj(
+        "action" to str("send or list", listOf("send", "list")),
+        "bot" to str("Bot id or name, with or without @"),
+        "message" to str("What to tell it"),
+    )
+
+    override suspend fun run(args: JSONObject, ctx: ToolContext): String {
+        val rt = ctx.runtime
+        if (args.optString("action") == "list") {
+            return ok("bots" to JSONArray(rt.bots.all().filter { it.id != ctx.agent.botId }.map {
+                JSONObject().put("id", it.id).put("name", it.name).put("title", it.title).put("description", it.description)
+            }))
+        }
+        val target = rt.bots.get(args.optString("bot")) ?: return fail("No bot '${args.optString("bot")}'. Use action='list'.")
+        val message = args.optString("message")
+        if (message.isBlank()) return fail("message is required")
+        if (target.id == ctx.agent.botId) return fail("You can't message yourself.")
+        val from = rt.bots.get(ctx.agent.botId)
+        ctx.listener.onStatus("🤖 → ${target.name}: ${message.take(80)}")
+        val chain = ctx.agent.botChain.ifEmpty { listOf(ctx.agent.botId) }
+        return rt.botHub.deliver(from, target, message, chain).fold(
+            { ok("from" to target.id, "reply" to it) },
+            { fail(it.message ?: "delivery failed") },
+        )
     }
 }

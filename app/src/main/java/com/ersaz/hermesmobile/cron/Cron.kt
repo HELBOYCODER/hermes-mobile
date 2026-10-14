@@ -33,11 +33,12 @@ data class CronJob(
     var runCount: Int = 0,
     var repeat: Int = 0, // 0 = unlimited for recurring
     var skills: List<String> = emptyList(),
+    var botId: String? = null, // Bot Mode routine: runs as this bot
 ) {
     fun toJson() = JSONObject().put("id", id).put("name", name).put("prompt", prompt).put("schedule", schedule)
         .put("deliver", deliver).put("origin", origin).put("enabled", enabled).put("next_run_at", nextRunAt)
         .put("last_run_at", lastRunAt).put("last_status", lastStatus).put("last_output", lastOutput.take(4000))
-        .put("run_count", runCount).put("repeat", repeat).put("skills", JSONArray(skills))
+        .put("run_count", runCount).put("repeat", repeat).put("skills", JSONArray(skills)).put("bot_id", botId)
 
     fun describe(): String {
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
@@ -54,6 +55,7 @@ data class CronJob(
             lastStatus = o.optString("last_status"), lastOutput = o.optString("last_output"),
             runCount = o.optInt("run_count"), repeat = o.optInt("repeat"),
             skills = o.optJSONArray("skills")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            botId = o.optStringOrNull("bot_id"),
         )
     }
 }

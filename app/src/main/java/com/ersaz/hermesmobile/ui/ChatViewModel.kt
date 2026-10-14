@@ -14,6 +14,7 @@ import com.ersaz.hermesmobile.agent.Agent
 import com.ersaz.hermesmobile.agent.AgentListener
 import com.ersaz.hermesmobile.agent.Session
 import com.ersaz.hermesmobile.agent.ToolCall
+import com.ersaz.hermesmobile.bots.Bot
 import com.ersaz.hermesmobile.commands.CommandHost
 import com.ersaz.hermesmobile.commands.CommandResult
 import com.ersaz.hermesmobile.commands.Commands
@@ -69,6 +70,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     var sessionTitle by mutableStateOf(""); private set
     var contextPct by mutableStateOf(0); private set
     var input by mutableStateOf("")
+    /** The Bot Mode profile this chat talks to; null = the default Hermes. */
+    var activeBot by mutableStateOf<Bot?>(null); private set
     val pendingImages = mutableStateListOf<String>()
     val pendingFiles = mutableStateListOf<Attachment>()
 
@@ -141,12 +144,42 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         input = voiceBase
     }
 
-    override fun onCleared() { voice?.cancel(); super.onCleared() }
+    override fun onCleared() {
+        dictation.pause()
+        voice?.cancel()
+        sinkSession?.let { runtime.agentJobs.unregisterSink(it, jobSink) }
+        super.onCleared()
+    }
+    /** Messages queued while a turn is running. */
+    val queued = mutableStateListOf<String>()
     private var job: Job? = null
     private var seq = 0
     private fun k() = "i${seq++}"
 
+    private val pendingBackground = mutableListOf<String>()
+    private var sinkSession: String? = null
+    private val jobSink = com.ersaz.hermesmobile.agent.jobs.AgentJobs.Sink { text -> ui { onBackgroundResult(text) } }
+
     init { rebuild() }
+
+    /** A sub-agent finished: show it and wake the main agent with the result (queued if it is mid-turn). */
+    private fun onBackgroundResult(text: String) {
+        if (busy) { pendingBackground += text; return }
+        items += ChatItem.Info(k(), "🔀 " + text.lineSequence().first())
+        runTurn(text, emptyList(), showUser = false)
+    }
+
+    private fun flushQueue() {
+        if (queued.isEmpty() || busy) return
+        val joined = queued.joinToString("\n\n"); queued.clear()
+        runTurn(joined, emptyList(), showUser = true)
+    }
+
+    private fun flushBackground() {
+        if (pendingBackground.isEmpty() || busy) return
+        val all = pendingBackground.joinToString("\n\n"); pendingBackground.clear()
+        onBackgroundResult(all)
+    }
 
     private fun latestAppSession(): Session {
         val latest = runtime.sessions.list().firstOrNull { it.source == "app" }
@@ -155,6 +188,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     /** Re-derive the visible transcript from the persisted session. */
     fun rebuild() {
+        sinkSession?.let { runtime.agentJobs.unregisterSink(it, jobSink) }
+        sinkSession = agent.session.id
+        runtime.agentJobs.registerSink(agent.session.id, jobSink)
         items.clear()
         val toolItems = mutableMapOf<String, ChatItem.Tool>()
         for (m in agent.session.messages) {
@@ -164,6 +200,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                         m.content.startsWith("[SYSTEM: The user invoked") -> "⚡ " + m.content.substringAfter("\"").substringBefore("\"") + " skill"
                         m.content.startsWith("[CONTEXT COMPACTION") -> null.also { items += ChatItem.Info(k(), "🗜️ Earlier turns were compressed") }
                         m.content.startsWith("[USER STEER") -> "🧭 " + m.content.substringAfter("]: ")
+                        m.content.startsWith("[Background task") -> null.also { items += ChatItem.Info(k(), "🔀 " + m.content.lineSequence().first()) }
                         m.content.startsWith("[SYSTEM:") -> null
                         else -> m.content
                     }
@@ -196,18 +233,49 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     override fun isBusy() = busy
 
+    /** Orb choreography derived from what the agent is doing right now. */
+    fun orbMode(): OrbMode {
+        if (approval != null || clarify != null) return OrbMode.Waiting
+        return when (val last = items.lastOrNull()) {
+            is ChatItem.Tool -> if (last.result == null) OrbMode.Tool else OrbMode.Thinking
+            is ChatItem.Assistant -> if (last.streaming && last.text.isNotEmpty()) OrbMode.Writing else OrbMode.Thinking
+            is ChatItem.Info -> if (last.isError) OrbMode.Error else OrbMode.Thinking
+            else -> OrbMode.Thinking
+        }
+    }
+
+    /** Caption under the orbs: the running tool and its argument preview. */
+    fun orbDetail(): String = (items.lastOrNull() as? ChatItem.Tool)?.takeIf { it.result == null }
+        ?.let { "${it.emoji} ${it.name}" + if (it.preview.isNotBlank()) " · ${it.preview.take(48)}" else "" }.orEmpty()
+
     override fun newSession(): Agent {
         stop()
-        _agent = Agent(runtime, Session(source = "app"))
+        val bot = activeBot ?: runtime.bots.get(Bot.DEFAULT_ID)!!
+        _agent = runtime.botHub.agentFor(bot, runtime.botHub.newChatSession(bot), if (bot.isDefault) "app" else "bot")
         ui { rebuild(); status = "" }
         return _agent
     }
 
     override fun resumeSession(session: Session): Agent {
         stop()
-        _agent = Agent(runtime, session, if (session.source in setOf("telegram", "discord", "slack")) session.source else "app")
+        val bot = session.botId?.let { runtime.bots.get(it) }
+        activeBot = bot?.takeUnless { it.isDefault }
+        _agent = when {
+            bot != null && !bot.isDefault -> runtime.botHub.agentFor(bot, session, "bot")
+            else -> Agent(runtime, session, if (session.source in setOf("telegram", "discord", "slack")) session.source else "app")
+        }
         ui { rebuild() }
         return _agent
+    }
+
+    /** Switch the chat to [bot]'s own conversation (its latest chat, or a fresh one). */
+    fun openBot(bot: Bot) {
+        val target = runtime.botHub.mainSessionFor(bot)
+        activeBot = bot.takeUnless { it.isDefault }
+        if (target.id == agent.session.id) return // already showing this bot's chat
+        stop()
+        _agent = runtime.botHub.agentFor(bot, target, if (bot.isDefault) "app" else "bot")
+        ui { rebuild(); status = "" }
     }
 
     fun openSession(id: String) { runtime.sessions.load(id)?.let { resumeSession(it) } }
@@ -269,6 +337,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 }
                 return@launch
             }
+            if (busy && runtime.settings.busyMode == "queue" && images.isEmpty()) { queued += text; return@launch }
             if (busy) {
                 // Hermes "busy" default: a new message interrupts the running turn.
                 agent.interrupt(); job?.join()
@@ -328,7 +397,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
             } catch (e: Exception) {
                 ui { items += ChatItem.Info(k(), "⚠️ ${e.message}", isError = true) }
             } finally {
-                ui { busy = false; current?.streaming = false; refreshMeta() }
+                ui { busy = false; current?.streaming = false; refreshMeta(); flushQueue(); flushBackground() }
             }
         }
     }

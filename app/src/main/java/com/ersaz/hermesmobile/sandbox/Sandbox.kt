@@ -178,6 +178,7 @@ class Sandbox(private val context: Context, private val settings: Settings) {
             "HERMES_HOME" to "/root/.hermes",
             "SHELL" to "/bin/sh",
         )
+        env.putAll(settings.envVars())
         if (settings.githubToken.isNotBlank()) {
             env["GH_TOKEN"] = settings.githubToken
             env["GITHUB_TOKEN"] = settings.githubToken

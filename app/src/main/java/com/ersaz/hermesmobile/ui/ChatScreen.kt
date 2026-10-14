@@ -170,6 +170,12 @@ fun ChatScreen(vm: ChatViewModel) {
             }
         }
 
+        if (vm.queued.isNotEmpty()) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${vm.queued.size} queued", color = skin.label, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                IconButton(onClick = { vm.queued.clear() }) { Icon(Icons.Default.Close, "clear queue", tint = skin.dim) }
+            }
+        }
         Composer(vm, onImage = { imagePicker.launch("image/*") }, onFile = { filePicker.launch(arrayOf("*/*")) }, onMic = onMic)
     }
 
@@ -423,6 +429,14 @@ private fun ChatRow(item: ChatItem) {
                 Box(Modifier.fillMaxWidth().animateContentSize()) {
                     MarkdownText(item.text + if (item.streaming) " ▌" else "")
                 }
+                if (!item.streaming && item.text.length > 1) {
+                    val rt = com.ersaz.hermesmobile.HermesRuntime.get(LocalContext.current)
+                    val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+                    Row {
+                        Text("🔊 read", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { rt.speech.speak(com.ersaz.hermesmobile.ui.plainSpeech(item.text)) }.padding(end = 14.dp, top = 4.dp))
+                        Text("⧉ copy", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { clip.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }.padding(top = 4.dp))
+                    }
+                }
             }
         }
         is ChatItem.Tool -> {
@@ -508,3 +522,10 @@ fun imageDataUri(context: android.content.Context, uri: Uri): String? = runCatch
     "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
 }.getOrNull()
 
+/** Strip markdown noise so text-to-speech doesn't read symbols aloud. */
+fun plainSpeech(md: String): String = md
+    .replace(Regex("```[\\s\\S]*?```"), " code block. ")
+    .replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "")
+    .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
+    .replace(Regex("[*_`#>|~]+"), " ")
+    .replace(Regex("\\s+"), " ").trim()

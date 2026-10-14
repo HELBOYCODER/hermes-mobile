@@ -50,7 +50,7 @@ class HermesService : Service() {
         .setSmallIcon(R.drawable.ic_stat_hermes)
         .setContentTitle("☤ Hermes agent running")
         .setContentText(
-            if (rt.settings.botMode) "Bot mode on · cron scheduler active" else "Cron scheduler active"
+            if (rt.settings.botMode) "Messaging gateway on · cron scheduler active" else "Cron scheduler active"
         )
         .setOngoing(true)
         .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))

@@ -21,7 +21,7 @@ data class Provider(val id: String, val label: String, val baseUrl: String, val 
 
 object Providers {
     val all = listOf(
-        Provider("nous", "Nous Portal", "https://inference-api.nousresearch.com/v1", "Hermes-4-405B", "Nous Portal API key"),
+        Provider("nous", "Nous Portal (sign in — free models included)", "https://inference-api.nousresearch.com/v1", "Hermes-4-405B", "Nous Portal API key"),
         Provider("openrouter", "OpenRouter (200+ models)", "https://openrouter.ai/api/v1", "nousresearch/hermes-4-405b", "sk-or-…"),
         Provider("openai", "OpenAI", "https://api.openai.com/v1", "gpt-4.1", "sk-…"),
         Provider("anthropic", "Anthropic (OpenAI-compatible)", "https://api.anthropic.com/v1", "claude-sonnet-4-5", "sk-ant-…"),
@@ -62,6 +62,8 @@ class LlmClient(
     private val baseUrl: String,
     private val apiKey: String,
     private val provider: String,
+    /** Supplies the bearer per request (OAuth sessions rotate); `force` = the server just rejected the last one. */
+    private val keyProvider: (suspend (force: Boolean) -> String?)? = null,
 ) {
     @Volatile private var activeCall: Call? = null
 
@@ -78,10 +80,14 @@ class LlmClient(
         temperature: Double? = null,
     ): LlmResponse {
         var attempt = 0
+        var forceKey = false
         while (true) {
             try {
-                return withContext(Dispatchers.IO) { doChat(model, messages, tools, stream, maxTokens, reasoningEffort, sink, temperature) }
+                val key = keyProvider?.invoke(forceKey) ?: apiKey
+                return withContext(Dispatchers.IO) { doChat(key, model, messages, tools, stream, maxTokens, reasoningEffort, sink, temperature) }
             } catch (e: LlmException) {
+                // An expired OAuth bearer: refresh once and replay the request.
+                if (e.status == 401 && keyProvider != null && !forceKey) { forceKey = true; continue }
                 attempt++
                 if (!e.retryable || attempt >= 3) throw e
                 delay(1500L * attempt * attempt)
@@ -90,7 +96,7 @@ class LlmClient(
     }
 
     private suspend fun doChat(
-        model: String, messages: List<Message>, tools: JSONArray?, stream: Boolean,
+        apiKey: String, model: String, messages: List<Message>, tools: JSONArray?, stream: Boolean,
         maxTokens: Int, reasoningEffort: String, sink: StreamSink?, temperature: Double?,
     ): LlmResponse {
         if (baseUrl.isBlank()) throw LlmException("No API endpoint configured — open Settings and pick a provider.")
@@ -210,14 +216,19 @@ class LlmClient(
     }
 
     /** GET /models — used by the model picker. */
-    suspend fun listModels(): List<String> = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url(baseUrl.trimEnd('/') + "/models")
-            .apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
-            .build()
-        http.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw LlmException("HTTP ${resp.code} listing models")
-            val o = JSONObject(resp.body?.string().orEmpty())
-            (o.optJSONArray("data") ?: JSONArray()).objects().map { it.optString("id") }.filter { it.isNotEmpty() }.sorted()
+    suspend fun listModels(): List<String> = listModelInfo().map { it.id }.sorted()
+
+    /** GET /models with pricing, context and capabilities where the provider advertises them. */
+    suspend fun listModelInfo(): List<ModelInfo> {
+        val key = keyProvider?.invoke(false) ?: apiKey
+        return withContext(Dispatchers.IO) {
+            val req = Request.Builder().url(baseUrl.trimEnd('/') + "/models")
+                .apply { if (key.isNotBlank()) header("Authorization", "Bearer $key") }
+                .build()
+            http.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) throw LlmException("HTTP ${resp.code} listing models", resp.code)
+                ModelCatalog.parse(resp.body?.string().orEmpty())
+            }
         }
     }
 }
