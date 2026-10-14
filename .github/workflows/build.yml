@@ -102,8 +102,8 @@ jobs:
           name: Hermes Mobile ${{ env.APP_VERSION }}
           files: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
           body: |
-            Immediate voice pause, resume into the existing draft, and send without waiting for the speech server.
-            Bundled ARM64 Linux prerequisites and one-tap 9Router installation/repair.
-            Includes the previously unmerged Bot Mode and UI changes.
-            ARM64 only. The full local 9Router server and SQLite runtime are bundled. Online models and speech recognition require internet.
-            Nous/Hermes uses account login only, with return to the app after approval.
+            Dashboard password is visible and copyable in Settings → 9Router.
+            Automatically connects OpenCode Free and lists only its free model lane, excluding OpenCode Zen.
+            After Nous/Hermes account login, the full free/premium catalog is loaded automatically, searchable and shown with pricing. Paid access follows account permissions.
+            Full local 9Router server and ARM64 prerequisites remain bundled; voice pause/resume fixes and Bot Mode are included.
+            ARM64 only. Online models and speech recognition require internet.

@@ -14,6 +14,53 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class RouterTest {
+    @Test fun openCodeFreeLaneExcludesZenAndOtherProviders() {
+        listOf("oc/big-pickle", "oc/union-alpha", "oc/jev-1.13-free", "opencode/muse-spark-free")
+            .forEach { assertTrue(it, RouterApi.isOpenCodeFree(it)) }
+        listOf("ocz/gpt-5-free", "opencode-zen/union-alpha", "kgw/model:free", "oc/", "oc")
+            .forEach { assertFalse(it, RouterApi.isOpenCodeFree(it)) }
+        assertEquals("opencode", RouterApi.OPENCODE_FREE_PROVIDER)
+    }
+
+    @Test fun panelLoginReturnsThePasswordThatActuallyWorked() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().setHeader("Set-Cookie", "auth_token=legacy; Path=/"))
+        server.start()
+        try {
+            val panel = RouterApi(OkHttpClient(), server.url("").toString().trimEnd('/')).loginPanel("old-saved")!!
+            assertEquals("123456", panel.password)
+            assertEquals("auth_token=legacy", panel.cookie)
+            assertTrue(server.takeRequest().body.readUtf8().contains("old-saved"))
+            assertTrue(server.takeRequest().body.readUtf8().contains("123456"))
+        } finally { server.shutdown() }
+    }
+
+    @Test fun openCodeFreeCombinesLiveCatalogWithBundledLaneAndExcludesZen() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody("""{"data":[{"id":"big-pickle"},{"id":"new-free"}]}"""))
+        server.enqueue(MockResponse().setBody("""{"data":[{"id":"oc/union-alpha"},{"id":"ocz/paid-free"},{"id":"other/free"}]}"""))
+        server.start()
+        try {
+            val catalog = RouterApi(OkHttpClient(), server.url("").toString().trimEnd('/')).openCodeFreeModels("auth_token=x", "key")
+            assertEquals(listOf("oc/big-pickle", "oc/new-free", "oc/union-alpha"), catalog.models)
+            assertTrue(catalog.live)
+            assertEquals("opencode-free", server.takeRequest().requestUrl!!.queryParameter("type"))
+        } finally { server.shutdown() }
+    }
+
+    @Test fun unavailableLiveCatalogFallsBackToOpenCodeFreeOnly() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(MockResponse().setBody("""{"data":[{"id":"oc/union-alpha"},{"id":"ocz/zen-free"}]}"""))
+        server.start()
+        try {
+            val catalog = RouterApi(OkHttpClient(), server.url("").toString().trimEnd('/')).openCodeFreeModels("auth_token=x", "key")
+            assertEquals(listOf("oc/union-alpha"), catalog.models)
+            assertFalse(catalog.live)
+        } finally { server.shutdown() }
+    }
+
     @Test
     fun freeModelDetection() {
         listOf("oc/jev-1.13-free", "kgw/nvidia/nemotron-3-super-120b-a12b:free", "bzl/auto:free", "tokenrouter/z-ai/glm-5.3-free", "kgw/kilo-auto/free")

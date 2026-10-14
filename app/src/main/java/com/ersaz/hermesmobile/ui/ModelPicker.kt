@@ -58,14 +58,25 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
     var rev by remember { mutableIntStateOf(0) }
     var freeOnly by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
     remember { store.ensureCurrent(Providers.byId(rt.settings.provider).label); 0 }
 
-    val list = remember(rev, freeOnly) { store.all().filter { !freeOnly || it.free }.sortedWith(compareBy({ it.label }, { it.model })) }
+    LaunchedEffect(Unit) {
+        if (rt.nousAuth.signedIn) {
+            runCatching { rt.refreshNousModels() }
+                .onFailure { msg = "Could not refresh Nous catalog: ${it.message}" }
+            rev++
+        }
+    }
+
+    val list = remember(rev, freeOnly, query) { store.all().filter { (!freeOnly || it.free) && (query.isBlank() || it.model.contains(query, true) || it.label.contains(query, true)) }.sortedWith(compareBy({ it.label }, { it.model })) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = skin.surface) {
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text("Models", color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            OutlinedTextField(query, { query = it }, singleLine = true, label = { Text("Search models or providers") },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(selected = !freeOnly, onClick = { freeOnly = false }, label = { Text("All") })
                 FilterChip(selected = freeOnly, onClick = { freeOnly = true }, label = { Text("Free") })
@@ -85,7 +96,8 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                             Column(Modifier.weight(1f)) {
                                 Text(p.model, color = if (active) skin.title else skin.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
-                                if (p.free) Text("FREE", color = skin.ok, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(if (p.free) "FREE" else p.priceLabel.ifBlank { "Pricing not listed" },
+                                    color = if (p.free) skin.ok else skin.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                             if (active) Icon(Icons.Default.Check, "selected", tint = skin.accent, modifier = Modifier.size(20.dp))
                             IconButton(onClick = { store.remove(p.id); rev++ }, modifier = Modifier.size(32.dp)) {
@@ -101,14 +113,21 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                     msg = "Fetching…"
                     scope.launch {
                         val s = rt.settings
-                        runCatching { rt.llmClient().listModels() }.fold(
-                            onSuccess = { ids ->
-                                val label = Providers.byId(s.provider).label
-                                store.upsertAll(ids.take(500).map { ModelProfile(label, s.provider, s.baseUrl, s.apiKey, it, com.ersaz.hermesmobile.router.RouterApi.isFree(it), "fetched") })
-                                msg = "Added ${ids.size} models from $label."; rev++
-                            },
-                            onFailure = { msg = "Could not fetch: ${it.message}" },
-                        )
+                        if (s.provider == "9router") {
+                            msg = if (rt.router.refreshFreeModels(false)) "OpenCode Free models refreshed." else rt.router.message.value
+                            rev++
+                        } else {
+                            runCatching { if (s.provider == "nous") rt.refreshNousModels() else rt.llmClient().listModelInfo() }.fold(
+                                onSuccess = { models ->
+                                    val label = Providers.byId(s.provider).label
+                                    if (s.provider != "nous") store.upsertAll(models.map {
+                                        ModelProfile(label, s.provider, s.baseUrl, s.apiKey, it.id, it.free, "fetched", it.priceLabel())
+                                    })
+                                    msg = "Loaded ${models.size} models from $label."; rev++
+                                },
+                                onFailure = { msg = "Could not fetch: ${it.message}" },
+                            )
+                        }
                     }
                 }) { Text("Fetch from provider") }
                 OutlinedButton(onClick = { adding = true }) { Text("Add model") }
@@ -153,16 +172,15 @@ fun ModelPickerDialog(rt: HermesRuntime, current: String, onPick: (ModelInfo) ->
     var models by remember { mutableStateOf<List<ModelInfo>?>(null) }
     var error by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
-    var freeOnly by remember { mutableStateOf(rt.settings.nousRoute == "free" || rt.settings.nousRoute == "welcome") }
+    var freeOnly by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        try { models = rt.llmClient().listModelInfo() } catch (e: Exception) { error = e.message ?: e.toString(); models = emptyList() }
+        try { models = if (rt.settings.provider == "nous") rt.refreshNousModels() else rt.llmClient().listModelInfo() } catch (e: Exception) { error = e.message ?: e.toString(); models = emptyList() }
     }
     val shown = remember(models, query, freeOnly) {
         (models ?: emptyList())
             .filter { (!freeOnly || it.free) && (query.isBlank() || it.id.contains(query, true) || it.name.contains(query, true)) }
             .sortedWith(compareByDescending<ModelInfo> { it.free && freeOnly }.thenBy { it.id })
-            .take(300)
     }
     AlertDialog(
         onDismissRequest = onDismiss,

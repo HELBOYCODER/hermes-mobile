@@ -29,7 +29,7 @@ data class NousRoute(
 class NousSetup(private val rt: HermesRuntime) {
 
     suspend fun configure(): NousRoute {
-        val catalog = LlmClient(rt.http, NousPortal.INFERENCE, "", "nous", rt.nousKeyProvider).listModelInfo()
+        val catalog = rt.refreshNousModels()
 
         // 1. Paid access? Probe one cheap call with a sensible default model.
         val paid = ModelCatalog.pickPaidDefault(catalog)
@@ -66,6 +66,8 @@ class NousSetup(private val rt: HermesRuntime) {
         s.baseUrl = route.baseUrl
         s.model = route.model
         s.nousRoute = route.tier
+        if (route.tier == "welcome") rt.modelStore.upsert(com.ersaz.hermesmobile.core.ModelProfile(
+            "Nous / Hermes", "nous", NousPortal.WELCOME, "", WELCOME_MODEL, true, "nous-catalog", "free"))
         if (route.contextLength > 0) s.contextLength = route.contextLength.coerceAtMost(200_000)
         return route.copy(message = route.message)
     }

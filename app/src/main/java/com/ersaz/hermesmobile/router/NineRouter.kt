@@ -125,37 +125,39 @@ class NineRouter(private val rt: HermesRuntime) {
     private suspend fun configureLocked(selectAsProvider: Boolean): Boolean {
         val a = api()
         try {
-            say("Connecting free providers…")
-            val cookie = a.login(s.routerPassword) ?: a.login("123456")
-                ?: run { fail("Could not sign in to the 9Router dashboard (password was changed there?). Open the dashboard and create an API key, then paste it in Settings → 9Router."); return false }
+            say("Connecting OpenCode Free…")
+            val panel = a.loginPanel(s.routerPassword)
+                ?: run { fail("Could not sign in to the dashboard. Use the password shown in Settings → 9Router, or the password you changed in the dashboard."); return false }
+            s.routerPassword = panel.password
+            val cookie = panel.cookie
             if (s.routerKey.isBlank()) s.routerKey = a.createKey(cookie, "hermes-mobile") ?: run { fail("Could not create an API key."); return false }
-            val connected = a.connectedProviders(cookie)
-            // OpenCode Zen's free tier accepts the public key; more providers can be added in the dashboard.
-            if ("opencode-zen" !in connected) a.connectKeyProvider(cookie, "opencode-zen", "public")
+            // OpenCode Free is a built-in no-auth lane; no provider connection or Zen key is needed.
 
-            say("Fetching free models…")
-            val free = a.models(s.routerKey).filter { RouterApi.isFree(it) }.distinct().sorted()
-            if (free.isEmpty()) { fail("9Router returned no free models."); return false }
+            say("Fetching OpenCode Free models…")
+            val catalog = a.openCodeFreeModels(cookie, s.routerKey)
+            val free = catalog.models
+            if (free.isEmpty()) { fail("OpenCode Free returned no models."); return false }
             rt.modelStore.replaceSource("9router", free.map {
-                ModelProfile("9Router", "9router", apiUrl, s.routerKey, it, free = true, source = "9router")
+                ModelProfile("9Router · OpenCode Free", "9router", apiUrl, s.routerKey, it, free = true, source = "9router")
             })
 
             // Pick the first free model that actually answers right now.
             var working: String? = null
             var lastErr: String? = null
-            for (m in free.take(12)) {
+            for (m in if (selectAsProvider) free.take(12) else emptyList()) {
                 val err = a.probe(s.routerKey, m)
                 if (err == null) { working = m; break } else lastErr = err
             }
             if (selectAsProvider) {
                 rt.modelStore.ensureCurrent("Previous")
                 val pick = working ?: free.first()
-                rt.modelStore.select(ModelProfile("9Router", "9router", apiUrl, s.routerKey, pick, true, "9router"))
+                rt.modelStore.select(ModelProfile("9Router · OpenCode Free", "9router", apiUrl, s.routerKey, pick, true, "9router"))
                 s.routerConfigured = true
             }
             say(
-                if (working != null) "Ready: ${free.size} free models, using $working."
-                else "${free.size} free models listed, but none answered just now (${lastErr ?: "unknown"}). " +
+                if (!selectAsProvider) "Ready: ${free.size} OpenCode Free models listed." + (if (catalog.live) "" else " Live catalog unavailable; showing bundled models.")
+                else if (working != null) "Ready: ${free.size} OpenCode Free models, using $working."
+                else "${free.size} OpenCode Free models listed, but none answered just now (${lastErr ?: "unknown"}). " +
                     "Free tiers change often — connect your own providers in the 9Router dashboard."
             )
             return true

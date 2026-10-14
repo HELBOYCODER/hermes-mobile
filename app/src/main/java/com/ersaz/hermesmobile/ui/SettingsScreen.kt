@@ -69,6 +69,7 @@ fun SettingsScreen(rt: HermesRuntime) {
     val s = rt.settings
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     var refresh by remember { mutableIntStateOf(0) }
     var models by remember { mutableStateOf<List<String>>(emptyList()) }
     var modelMsg by remember { mutableStateOf("") }
@@ -178,6 +179,18 @@ fun SettingsScreen(rt: HermesRuntime) {
             OutlinedButton(enabled = rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING,
                 onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(rt.router.dashboardUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("Dashboard") }
         }
+        var showRouterPassword by remember { mutableStateOf(true) }
+        val panelPassword = s.routerPassword
+        Field("Dashboard password", panelPassword, secret = !showRouterPassword, readOnly = true) {}
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { showRouterPassword = !showRouterPassword }) {
+                Text(if (showRouterPassword) "Hide password" else "Show password")
+            }
+            OutlinedButton(enabled = panelPassword.isNotBlank(), onClick = {
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(panelPassword))
+            }) { Text("Copy password") }
+        }
+        if (panelPassword.isBlank()) Hint("The dashboard password appears when 9Router starts.")
         Toggle("Start with the app", s.routerAutoStart, "Starts 9Router whenever Hermes opens") { s.routerAutoStart = it; refresh++ }
         key(refresh) {
             Field("IP / host", s.routerHost) { s.routerHost = it.trim().ifBlank { "127.0.0.1" } }

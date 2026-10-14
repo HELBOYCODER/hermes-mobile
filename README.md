@@ -1,4 +1,4 @@
-# Hermes Mobile — نسخه ۲.۳.۲
+# Hermes Mobile — نسخه ۲.۳.۳
 
 **اپ اندرویدیِ کاملاً بومیِ [Hermes Agent](https://hermes-agent.nousresearch.com/)** (پروژه‌ی متن‌باز Nous Research، لایسنس MIT)، بدون هیچ ارتباط رسمی با Nous Research.
 
@@ -30,7 +30,7 @@
 
 ## 📲 نصب
 
-**فقط معماری arm64** (گوشی‌های مدرن). [فایل APK را از اینجا دانلود کنید](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.2/hermes-mobile-2.3.2-arm64.apk).
+**فقط معماری arm64** (گوشی‌های مدرن). [فایل APK را از اینجا دانلود کنید](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.3/hermes-mobile-2.3.3-arm64.apk).
 
 نصب از منبع ناشناس باید در تنظیمات گوشی مجاز باشد.
 
@@ -53,3 +53,7 @@
 برای ساخت: ابتدا `scripts/fetch_sandbox.sh`، سپس `scripts/bundle_prerequisites.sh` و در پایان `./gradlew testDebugUnitTest assembleRelease` را اجرا کنید.
 
 پرووایدر Nous/Hermes فقط از ورود حساب Nous Portal استفاده می‌کند و پس از تأیید، به اپ برمی‌گردد. سرور 9Router به‌طور پیش‌فرض همراه برنامه روی `http://127.0.0.1:20128` اجرا می‌شود و اجرای آن پرووایدر انتخابی کاربر را عوض نمی‌کند.
+
+## تغییرات ۲.۳.۳
+
+رمز داشبورد 9Router در تنظیمات قابل نمایش و کپی است. اتصال خودکار به OpenCode Free انجام می‌شود و فهرست روتر فقط مدل‌های این سرویس را نشان می‌دهد. بعد از ورود Nous/Hermes، کاتالوگ کامل مدل‌های رایگان و پولی خودکار در انتخاب‌گر نمایش داده می‌شود؛ استفاده از مدل‌های پولی به مجوز حساب وابسته است.

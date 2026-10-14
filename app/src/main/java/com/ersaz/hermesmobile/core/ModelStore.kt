@@ -11,16 +11,17 @@ data class ModelProfile(
     val apiKey: String,
     val model: String,
     val free: Boolean = false,
-    val source: String = "manual", // manual | fetched | 9router
+    val source: String = "manual", // manual | fetched | 9router | nous-catalog
+    val priceLabel: String = "",
 ) {
     val id get() = "$baseUrl|$model"
     fun toJson() = JSONObject().put("label", label).put("provider", providerId).put("base_url", baseUrl)
-        .put("api_key", apiKey).put("model", model).put("free", free).put("source", source)
+        .put("api_key", apiKey).put("model", model).put("free", free).put("source", source).put("price_label", priceLabel)
 
     companion object {
         fun fromJson(o: JSONObject) = ModelProfile(
             o.optString("label"), o.optString("provider", "custom"), o.optString("base_url"), o.optString("api_key"),
-            o.optString("model"), o.optBoolean("free"), o.optString("source", "manual"),
+            o.optString("model"), o.optBoolean("free"), o.optString("source", "manual"), o.optString("price_label"),
         )
     }
 }
@@ -36,6 +37,7 @@ class ModelStore(private val settings: Settings) {
         settings.modelProfiles = JSONArray().also { a -> list.forEach { a.put(it.toJson()) } }.toString()
     }
 
+    @Synchronized
     fun upsert(p: ModelProfile) {
         val l = all().toMutableList()
         val i = l.indexOfFirst { it.id == p.id }
@@ -43,16 +45,19 @@ class ModelStore(private val settings: Settings) {
         save(l)
     }
 
+    @Synchronized
     fun upsertAll(ps: List<ModelProfile>) {
         val l = all().associateBy { it.id }.toMutableMap()
         ps.forEach { l[it.id] = it }
         save(l.values.toList())
     }
 
+    @Synchronized
     fun remove(id: String) = save(all().filter { it.id != id })
 
     /** Replace every entry that came from [source] (used when the 9Router free list is refreshed). */
-    fun replaceSource(source: String, ps: List<ModelProfile>) = save(all().filter { it.source != source } + ps)
+    @Synchronized
+    fun replaceSource(source: String, ps: List<ModelProfile>) = save(replaceModelSource(all(), source, ps))
 
     fun isActive(p: ModelProfile) = settings.baseUrl.trimEnd('/') == p.baseUrl.trimEnd('/') && settings.model == p.model
 
@@ -65,9 +70,24 @@ class ModelStore(private val settings: Settings) {
     }
 
     /** Keep the currently configured model in the list so it can always be switched back to. */
+    @Synchronized
     fun ensureCurrent(label: String) {
         if (settings.model.isBlank() || settings.baseUrl.isBlank()) return
         val cur = ModelProfile(label, settings.provider, settings.baseUrl, settings.apiKey, settings.model)
         if (all().none { it.id == cur.id }) upsert(cur)
     }
+}
+
+/** Preserve the complete account catalog even if login selected a free/default route. */
+fun nousCatalogProfiles(models: List<com.ersaz.hermesmobile.llm.ModelInfo>): List<ModelProfile> = models.map { m ->
+    ModelProfile("Nous / Hermes", "nous",
+        if (m.id == com.ersaz.hermesmobile.auth.NousSetup.WELCOME_MODEL) com.ersaz.hermesmobile.auth.NousPortal.WELCOME
+        else com.ersaz.hermesmobile.auth.NousPortal.INFERENCE,
+        "", m.id, m.free, "nous-catalog", m.priceLabel())
+}
+
+/** Prefer fresh catalog metadata without producing duplicate LazyColumn keys. */
+fun replaceModelSource(existing: List<ModelProfile>, source: String, incoming: List<ModelProfile>): List<ModelProfile> {
+    val ids = incoming.map { it.id }.toSet()
+    return existing.filter { it.source != source && it.id !in ids } + incoming.distinctBy { it.id }
 }
