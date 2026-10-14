@@ -77,10 +77,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     var listening by mutableStateOf(false); private set
     /** True between "stop" and the transcript arriving. */
     var transcribing by mutableStateOf(false); private set
-    private var sendWhenDone = false
+    var voicePaused by mutableStateOf(false); private set
     var voiceError by mutableStateOf<String?>(null)
     private var voiceBase = ""
     private var voice: VoiceInput? = null
+    private val dictation = com.ersaz.hermesmobile.stt.DictationDraft()
 
     fun cycleVoiceLang() {
         if (listening) return
@@ -88,40 +89,51 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         runtime.settings.voiceLang = voiceLang.code
     }
 
-    private fun joinWithBase(extra: String): String =
-        if (extra.isBlank()) voiceBase else if (voiceBase.isBlank()) extra else voiceBase.trimEnd() + " " + extra
-
     /** Mic button: tap to start dictating into the message box, tap again to stop. */
     fun toggleVoice() {
         val v = voice
-        if (listening && v != null) { v.stop(); return }
-        if (transcribing) return
+        if ((listening || transcribing) && v != null) { pauseVoice(); return }
         voiceError = null
         voiceBase = input
         val lang = voiceLang
+        val generation = dictation.begin(input)
         val engine = VoiceInput(
-            onText = { t: StreamText -> ui { input = joinWithBase(VoiceInput.preview(t, lang)) } },
-            onProcessing = { on -> ui { transcribing = on; if (on) listening = false } },
+            onText = { t: StreamText -> ui { if (dictation.accepts(generation)) input = dictation.update(generation, VoiceInput.preview(t, lang)) ?: input } },
+            onProcessing = { on -> ui { if (dictation.accepts(generation)) { transcribing = on; if (on) listening = false } } },
             onDone = { final, err ->
                 ui {
-                    if (final.isNotBlank()) input = joinWithBase(final)
+                    if (!dictation.accepts(generation)) return@ui
+                    if (final.isNotBlank()) input = dictation.update(generation, final) ?: input
                     if (err != null) voiceError = err
                     listening = false
                     transcribing = false
                     voice = null
-                    if (sendWhenDone) { sendWhenDone = false; if (final.isNotBlank() || input.isNotBlank()) send() }
+                    dictation.pause()
+                    voicePaused = input.isNotBlank()
                 }
             },
         )
         voice = engine
-        sendWhenDone = false
+        voicePaused = false
         listening = true
         engine.start(lang)
     }
 
+    /** Keep the displayed transcript and release capture without waiting on the network. */
+    fun pauseVoice() {
+        dictation.pause()
+        val previous = voice
+        voice = null
+        listening = false
+        transcribing = false
+        voicePaused = true
+        previous?.cancel()
+    }
+
     /** X next to the mic: throw the recording away. */
     fun cancelVoice() {
-        sendWhenDone = false
+        dictation.pause()
+        voicePaused = false
         voice?.cancel()
         listening = false
         transcribing = false
@@ -225,16 +237,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     /** Called from the input bar. */
     fun send() {
+        if (listening || transcribing) pauseVoice()
         val text = input.trim()
         val images = pendingImages.toList()
         val files = pendingFiles.toList()
-        if (listening || transcribing) {
-            // Send pressed while dictating: finish the recording, then send what was said.
-            sendWhenDone = true
-            voice?.stop()
-            return
-        }
         if (text.isEmpty() && images.isEmpty() && files.isEmpty()) return
+        voicePaused = false
         input = ""
         pendingImages.clear()
         pendingFiles.clear()

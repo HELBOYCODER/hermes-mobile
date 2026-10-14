@@ -45,16 +45,39 @@ class NineRouter(private val rt: HermesRuntime) {
     /** The one-tap flow: install → start → connect free providers → select 9Router in Hermes → fetch free models. */
     suspend fun installAndSetup(): Boolean = lock.withLock {
         if (!rt.sandbox.isInstalled() && !rt.sandbox.ensureInstalled()) { fail("The Linux sandbox is not ready yet."); return false }
+        // Validate and repair dependencies even when an older installation exists.
+        _state.value = State.INSTALLING
+        say("Preparing Linux prerequisites (Node.js, npm, Python, Git, TLS and build tools)…")
+        val prerequisites = rt.sandbox.exec(
+            "missing=0; for cmd in node npm python3 pip3 git curl bash cc make openssl update-ca-certificates; do command -v \"${'$'}cmd\" >/dev/null 2>&1 || missing=1; done; " +
+                "if [ \"${'$'}missing\" = 1 ]; then apk add --no-cache ca-certificates bash curl git python3 py3-pip nodejs npm build-base linux-headers openssl || exit ${'$'}?; fi; " +
+                "update-ca-certificates 2>&1 && " +
+                "node --version && npm --version && python3 --version && git --version",
+            timeoutSec = 1800, onOutput = { appendLog(it) },
+        )
+        if (prerequisites.exitCode != 0) {
+            fail("Prerequisite setup failed (exit ${prerequisites.exitCode}). Check the connection and retry; your data is kept.")
+            return false
+        }
         if (!installed()) {
             _state.value = State.INSTALLING
             say("Installing Node.js and 9Router (this takes a few minutes)…")
             val r = rt.sandbox.exec(
-                "apk add --no-cache nodejs npm 2>&1 && npm install -g 9router 2>&1", timeoutSec = 1800,
+                "npm install -g 9router 2>&1 && command -v 9router", timeoutSec = 1800,
                 onOutput = { appendLog(it) },
             )
             if (r.exitCode != 0 || !installed()) { fail("Install failed (exit ${r.exitCode}). See the log below."); return false }
         }
-        startLocked() && configureLocked(selectAsProvider = true)
+        try {
+            startLocked() && configureLocked(selectAsProvider = true)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            proc?.let { rt.processes.kill(it.id) }; proc = null
+            _state.value = State.STOPPED
+            throw e
+        } catch (e: Exception) {
+            fail("9Router setup failed: ${e.message}")
+            false
+        }
     }
 
     suspend fun start(): Boolean = lock.withLock { startLocked() }
@@ -67,6 +90,7 @@ class NineRouter(private val rt: HermesRuntime) {
         say("Starting 9Router on ${s.routerHost}:${s.routerPort}…")
         val cmd = "INITIAL_PASSWORD=${Sandbox.shQuote(s.routerPassword)} exec 9router --no-browser --skip-update " +
             "-H ${Sandbox.shQuote(s.routerHost)} -p ${s.routerPort}"
+        proc?.let { rt.processes.kill(it.id) }
         proc = rt.processes.start(cmd, "/root")
         // First launch installs 9Router's own runtime dependencies, so give it time.
         repeat(120) {
@@ -76,6 +100,7 @@ class NineRouter(private val rt: HermesRuntime) {
             }
             delay(2000)
         }
+        proc?.let { rt.processes.kill(it.id) }; proc = null
         fail("9Router did not answer on $baseUrl after 4 minutes.")
         return false
     }
@@ -134,6 +159,8 @@ class NineRouter(private val rt: HermesRuntime) {
                     "Free tiers change often — connect your own providers in the 9Router dashboard."
             )
             return true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             fail("9Router setup failed: ${e.message}")
             return false

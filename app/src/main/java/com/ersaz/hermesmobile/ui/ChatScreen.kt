@@ -240,7 +240,7 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
             }
             BasicTextField(
                 value = vm.input,
-                onValueChange = { vm.input = it },
+                onValueChange = { if (vm.listening || vm.transcribing) vm.pauseVoice(); vm.input = it },
                 textStyle = TextStyle(color = skin.text, fontSize = 16.sp, lineHeight = 22.sp),
                 cursorBrush = SolidColor(skin.accent),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -248,13 +248,20 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (vm.input.isEmpty()) {
-                            Text(if (vm.listening) "Listening… tap ■ to stop, ↑ to send" else if (vm.transcribing) "Processing voice…" else "Message ${skin.agentName.substringBefore(' ')}, or type /help",
+                            Text(if (vm.listening) "Listening… tap pause to keep text, ↑ to send" else if (vm.transcribing) "Processing voice…" else "Message ${skin.agentName.substringBefore(' ')}, or type /help",
                                 color = skin.dim, fontSize = 16.sp)
                         }
                         inner()
                     }
                 },
             )
+            if (vm.listening || vm.voicePaused) {
+                Text(
+                    if (vm.listening) "Recording · Pause keeps your text" else "Paused · Tap mic to continue, or send",
+                    color = if (vm.listening) skin.error else skin.label, fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                )
+            }
             vm.voiceError?.let {
                 Text(it, color = skin.error, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().clickable { vm.voiceError = null }.padding(horizontal = 14.dp, vertical = 2.dp))
@@ -307,14 +314,14 @@ private fun MicButton(listening: Boolean, transcribing: Boolean, onClick: () -> 
     val pulse = rememberInfiniteTransition(label = "mic")
     val a by pulse.animateFloat(1f, 0.45f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "micAlpha")
     if (transcribing) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
             androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = skin.accent, strokeWidth = 2.dp)
         }
     } else if (listening) {
         Box(
-            Modifier.size(40.dp).alpha(a).clip(CircleShape).background(skin.error).clickable(onClick = onClick),
+            Modifier.size(48.dp).alpha(a).clip(CircleShape).background(skin.error).clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.Stop, "stop dictation", tint = Color.White, modifier = Modifier.size(20.dp)) }
+        ) { Icon(Icons.Default.Pause, "pause dictation and keep text", tint = Color.White, modifier = Modifier.size(20.dp)) }
     } else {
         IconButton(onClick = onClick) { Icon(Icons.Default.Mic, "voice typing", tint = skin.label) }
     }

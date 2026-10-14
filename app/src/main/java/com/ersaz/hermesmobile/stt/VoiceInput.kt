@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -40,6 +41,8 @@ class VoiceInput(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+    @Volatile private var recorder: AudioRecord? = null
+    @Volatile private var session: SdaSession? = null
     @Volatile private var stopRequested = false
     @Volatile private var cancelled = false
 
@@ -52,6 +55,7 @@ class VoiceInput(
         cancelled = false
         job = scope.launch {
             val session = SdaSession(lang.code, scope)
+            this@VoiceInput.session = session
             var record: AudioRecord? = null
             var captions: Job? = null
             val live = java.util.concurrent.atomic.AtomicReference(StreamText("", ""))
@@ -62,6 +66,8 @@ class VoiceInput(
                     AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
                     max(minBuf, FLAC_SAMPLE_RATE * 2 * 8),
                 )
+                recorder = record
+                if (cancelled) return@launch
                 if (record.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException("microphone unavailable")
                 record.startRecording()
                 session.start()
@@ -70,8 +76,9 @@ class VoiceInput(
                 val buffer = ShortArray(1_600) // 100 ms
                 val maxSamples = 10 * 60 * FLAC_SAMPLE_RATE
                 var total = 0
-                while (!stopRequested && !cancelled && total < maxSamples) {
+                while (isActive && !stopRequested && !cancelled && total < maxSamples) {
                     val n = record.read(buffer, 0, buffer.size)
+                    if (stopRequested || cancelled) break
                     if (n < 0) throw IllegalStateException("audio read error $n")
                     if (n == 0) { delay(10); continue }
                     val floats = FloatArray(n) { buffer[it] / 32768f }
@@ -98,16 +105,32 @@ class VoiceInput(
                 runCatching { record?.release() }
                 session.cancel()
                 captions?.cancel()
-                onDone("", e.message ?: "recording failed")
+                if (!cancelled) onDone("", e.message ?: "recording failed")
+            } finally {
+                runCatching { record?.stop() }
+                runCatching { record?.release() }
+                recorder = null
+                session.cancel()
+                this@VoiceInput.session = null
+                captions?.cancel()
             }
         }
     }
 
     /** Stop capturing and let the server flush the last words. */
-    fun stop() { stopRequested = true }
+    fun stop() {
+        stopRequested = true
+        runCatching { recorder?.stop() }
+    }
 
     /** Abort without producing text. */
-    fun cancel() { cancelled = true; stopRequested = true }
+    fun cancel() {
+        cancelled = true
+        stopRequested = true
+        runCatching { recorder?.stop() }
+        session?.cancel()
+        scope.cancel()
+    }
 
     companion object {
         /** How long to wait for the final transcript after the user stops recording. */

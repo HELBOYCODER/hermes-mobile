@@ -17,7 +17,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okio.BufferedSink
 import java.io.IOException
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
 const val MAX_WAIT_MS = 45_000L
@@ -80,7 +79,7 @@ class SdaSession(
     private val scope: CoroutineScope,
 ) {
     private val cmds = Channel<Cmd>(Channel.UNLIMITED)
-    private val bodyQueue = LinkedBlockingQueue<ByteArray?>()
+    private val bodyQueue = AudioUploadQueue()
     private val state = SessionState()
     private val result = CompletableDeferred<Result<String>>()
 
@@ -88,6 +87,9 @@ class SdaSession(
     private val _liveText = MutableStateFlow(StreamText("", ""))
     val liveText: StateFlow<StreamText> = _liveText
 
+    @Volatile private var upCall: okhttp3.Call? = null
+    @Volatile private var aborted = false
+    private var sessionJob: kotlinx.coroutines.Job? = null
     @Volatile private var downCall: okhttp3.Call? = null
     private var started = false
 
@@ -107,7 +109,7 @@ class SdaSession(
     fun start() {
         check(!started) { "session already started" }
         started = true
-        scope.launch { runSession() }
+        sessionJob = scope.launch { runSession() }
     }
 
     /**
@@ -116,10 +118,12 @@ class SdaSession(
      * and the /down stream is left open.
      */
     fun cancel() {
+        aborted = true
         cmds.close()
-        bodyQueue.clear()
-        bodyQueue.add(null)
+        bodyQueue.cancel()
         downCall?.cancel()
+        upCall?.cancel()
+        sessionJob?.cancel()
         result.complete(Result.failure(IOException("session cancelled")))
     }
 
@@ -167,7 +171,7 @@ class SdaSession(
                     if (!state.finishRequested) state.upError = "audio pump failed: ${e.message}"
                 }
             } finally {
-                bodyQueue.put(null) // ends the request body
+                bodyQueue.finish() // ends the request body
             }
         }
 
@@ -245,6 +249,7 @@ class SdaSession(
                 .build()
             val call = sharedClient.newCall(req)
             downCall = call
+            if (aborted) { call.cancel(); return }
             call.execute().use { resp ->
                 if (!resp.isSuccessful) {
                     Log.w(TAG, "/down rejected: HTTP ${resp.code}")
@@ -312,7 +317,10 @@ class SdaSession(
             .post(body)
             .build()
         try {
-            sharedClient.newCall(req).execute().use { resp ->
+            val call = sharedClient.newCall(req)
+            upCall = call
+            if (aborted) { call.cancel(); return }
+            call.execute().use { resp ->
                 if (!resp.isSuccessful) {
                     val snippet = try {
                         resp.body?.string()?.take(160) ?: ""
