@@ -182,7 +182,7 @@ class Agent(
             val message = runtime.settings.redactEnvironment("⚠️ ${e.message ?: "Request failed"}")
             markFailure(message)
             listener.onError(message)
-            return ""
+            return message
         } finally {
             running = false
             llm = null

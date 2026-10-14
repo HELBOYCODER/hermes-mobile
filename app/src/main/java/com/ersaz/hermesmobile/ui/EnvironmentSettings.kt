@@ -23,8 +23,8 @@ fun EnvironmentSettings(settings: Settings) {
     Hint("کلیدها و مقدارها را اینجا ذخیره کنید، نه در چت. برای فرمان‌های جدید لینوکس اعمال می‌شوند؛ تب ترمینال یا سرویس در حال اجرا را دوباره باز کنید.\nSave keys here, outside chat. New Linux processes receive them; restart existing terminals/services.")
     entries.forEach { (key, _) ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { original = key; name = key; value = entries[key].orEmpty(); show = false; message = "" }) {
-                Text("$key  ••••••••")
+            TextButton(modifier = Modifier.weight(1f), onClick = { original = key; name = key; value = entries[key].orEmpty(); show = false; message = "" }) {
+                Text("$key  ••••••••", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
             TextButton(onClick = {
                 runCatching { settings.sandboxEnv = EnvironmentVariables.serialize(entries - key) }

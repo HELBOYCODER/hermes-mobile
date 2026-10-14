@@ -117,7 +117,7 @@ class Session(
         .put("model_override", modelOverride)
         .put("bot_id", botId)
 
-    /** Retry only the most recent failed user turn; keep earlier history and attachments. */
+    /** Resume only the most recent failed user turn; preserve history, attachments and completed tools. */
     fun prepareFailedTurnForRetry(localId: String): Message? {
         val index = messages.indexOfFirst { it.localId == localId && it.role == "user" && it.failureReason != null }
         if (index < 0 || messages.drop(index + 1).any { it.role == "user" && !it.content.startsWith("[SYSTEM:") && !it.content.startsWith("[USER STEER") }) return null
