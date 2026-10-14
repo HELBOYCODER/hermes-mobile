@@ -9,6 +9,9 @@ class EnvironmentVariablesTest {
         val value = "  \"token=a=b\" $ literal  "
         assertEquals(value, Env.parse(Env.serialize(mapOf("API_KEY" to value)))["API_KEY"])
     }
+    @Test fun migratesLegacyQuotedTokensWithoutChangingTheirEffectiveValue() {
+        assertEquals("token", Env.parseLegacy("KEY=  \"token\"  ")["KEY"])
+    }
     @Test fun rejectsInvalidNamesAndHandlesEmptyValues() {
         assertEquals(mapOf("EMPTY" to "", "GOOD" to "last"), Env.parse("EMPTY=\n1BAD=x\nGOOD=first\nGOOD=last\n# comment"))
     }

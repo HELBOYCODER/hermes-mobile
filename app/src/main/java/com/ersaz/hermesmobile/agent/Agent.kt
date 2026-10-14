@@ -67,11 +67,12 @@ class Agent(
         .filter { it.name != "message_bot" || runtime.bots.all().size > 1 } // nobody to message in a one-bot roster
 
     /** Run one user turn through the tool-calling loop. Returns the final assistant text. */
-    suspend fun runTurn(userText: String, images: List<String> = emptyList(), listener: AgentListener): String {
+    suspend fun runTurn(userText: String, images: List<String> = emptyList(), listener: AgentListener, retryMessageId: String? = null): String {
         interrupted = false
         running = true
         if (depth == 0) runtime.botHub.setRunning(botId, true)
-        val userMessage = Message("user", userText, images = images)
+        val userMessage = retryMessageId?.let { id -> session.messages.firstOrNull { it.localId == id && it.role == "user" } }
+            ?: Message("user", userText, images = images)
         fun markFailure(text: String) {
             val index = session.messages.indexOfFirst { it.localId == userMessage.localId }
             if (index >= 0) session.messages[index] = session.messages[index].copy(failureReason = text)
@@ -79,11 +80,12 @@ class Agent(
         }
         try {
             val settings = runtime.settings
+            if (retryMessageId == null) session.messages += userMessage
+            runtime.sessions.save(session)
             if (session.systemPrompt == null) {
                 session.systemPrompt = PromptBuilder.build(runtime, this)
                 session.model = model()
             }
-            session.messages += userMessage
             runtime.sessions.save(session)
 
             val client = runtime.llmClient().also { llm = it }

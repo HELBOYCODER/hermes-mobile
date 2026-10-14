@@ -17,20 +17,21 @@ class FailedTurnTest {
     @Test fun retryKeepsPriorHistoryAndOriginalAttachments() {
         val previous = Message("user", "earlier")
         val failed = Message("user", "سلام", images = listOf("image"), failureReason = "HTTP 403")
-        val session = Session(messages = mutableListOf(previous, Message("assistant", "answer"), failed, Message("assistant", "partial")))
-        val retry = session.takeFailedTurnForRetry(failed.localId)!!
+        val session = Session(messages = mutableListOf(previous, Message("assistant", "answer"), failed, Message("tool", "completed tool output")))
+        val retry = session.prepareFailedTurnForRetry(failed.localId)!!
         assertEquals("سلام", retry.content)
         assertEquals(listOf("image"), retry.images)
         assertNull(retry.failureReason)
-        assertEquals(2, session.messages.size)
-        assertNull(session.takeFailedTurnForRetry(failed.localId))
+        assertEquals(4, session.messages.size)
+        assertEquals("completed tool output", session.messages.last().content)
+        assertNull(session.prepareFailedTurnForRetry(failed.localId))
     }
     @Test fun cannotDiscardLaterUserTurnsOrRetrySuccessfulTurn() {
         val failed = Message("user", "failed", failureReason = "offline")
         val later = Message("user", "later")
         val session = Session(messages = mutableListOf(failed, later))
-        assertNull(session.takeFailedTurnForRetry(failed.localId))
-        assertNull(session.takeFailedTurnForRetry(later.localId))
+        assertNull(session.prepareFailedTurnForRetry(failed.localId))
+        assertNull(session.prepareFailedTurnForRetry(later.localId))
         assertEquals(2, session.messages.size)
     }
 }

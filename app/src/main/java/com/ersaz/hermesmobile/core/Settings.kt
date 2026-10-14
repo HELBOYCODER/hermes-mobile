@@ -100,7 +100,8 @@ class Settings(context: Context) : NousTokenStore {
     var sandboxEnv: String
         @Synchronized get() {
             val stored = prefs.getString("sandbox_env", "").orEmpty()
-            val value = EnvironmentSecretStore.open(stored)
+            val value = if (stored.isNotEmpty() && !EnvironmentSecretStore.encrypted(stored))
+                EnvironmentVariables.serialize(EnvironmentVariables.parseLegacy(stored)) else EnvironmentSecretStore.open(stored)
             if (stored.isNotEmpty() && !EnvironmentSecretStore.encrypted(stored)) {
                 check(prefs.edit().putString("sandbox_env", EnvironmentSecretStore.seal(value)).commit())
             }

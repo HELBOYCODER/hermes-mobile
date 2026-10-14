@@ -118,12 +118,13 @@ class Session(
         .put("bot_id", botId)
 
     /** Retry only the most recent failed user turn; keep earlier history and attachments. */
-    fun takeFailedTurnForRetry(localId: String): Message? {
+    fun prepareFailedTurnForRetry(localId: String): Message? {
         val index = messages.indexOfFirst { it.localId == localId && it.role == "user" && it.failureReason != null }
         if (index < 0 || messages.drop(index + 1).any { it.role == "user" && !it.content.startsWith("[SYSTEM:") && !it.content.startsWith("[USER STEER") }) return null
         val failed = messages[index]
-        messages.subList(index, messages.size).clear()
-        return failed.copy(failureReason = null)
+        val retry = failed.copy(failureReason = null)
+        messages[index] = retry
+        return retry
     }
 
     fun displayTitle(): String = title.ifBlank {

@@ -12,6 +12,7 @@ object EnvironmentVariables {
             }
         }
     }
+    fun parseLegacy(text: String): Map<String, String> = parse(text).mapValues { (_, value) -> value.trim().trim('"') }
     fun serialize(values: Map<String, String>): String = values.entries.joinToString("\n") { (name, value) ->
         require(validName(name) && '\n' !in value && '\r' !in value && '\u0000' !in value)
         "$name=$value"

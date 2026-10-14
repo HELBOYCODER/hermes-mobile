@@ -66,6 +66,10 @@ class Backup(private val ctx: Context, private val hermesHome: File) {
                     val j = JSONObject(String(bytes))
                     val e = ctx.getSharedPreferences("hermes_settings", Context.MODE_PRIVATE).edit()
                     j.keys().forEach { k ->
+                        if (k == "sandbox_env") {
+                            com.ersaz.hermesmobile.core.Settings(ctx).sandboxEnv = j.getString(k)
+                            return@forEach
+                        }
                         when (val v = j.get(k)) {
                             is Boolean -> e.putBoolean(k, v); is Int -> e.putInt(k, v); is Long -> e.putLong(k, v)
                             is Double -> e.putFloat(k, v.toFloat()); is String -> e.putString(k, v)

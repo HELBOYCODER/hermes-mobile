@@ -349,16 +349,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     fun retryFailed(item: ChatItem.User) {
         if (busy) return
-        val failed = item.messageId?.let { agent.session.takeFailedTurnForRetry(it) } ?: return
+        val failed = item.messageId?.let { agent.session.prepareFailedTurnForRetry(it) } ?: return
         runtime.sessions.save(agent.session)
         rebuild()
-        runTurn(failed.content, failed.images, showUser = true)
+        runTurn(failed.content, failed.images, showUser = false, retryMessageId = failed.localId)
     }
 
     fun canRetry(item: ChatItem.User): Boolean = !busy && item.failure != null &&
         agent.session.messages.lastOrNull { it.role == "user" && !it.content.startsWith("[SYSTEM:") && !it.content.startsWith("[USER STEER") }?.localId == item.messageId
 
-    private fun runTurn(text: String, images: List<String>, showUser: Boolean) {
+    private fun runTurn(text: String, images: List<String>, showUser: Boolean, retryMessageId: String? = null) {
         if (showUser) items += ChatItem.User(k(), text, images)
         busy = true
         status = ""
@@ -399,7 +399,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 }
             }
             try {
-                val result = a.runTurn(text, images, listener)
+                val result = a.runTurn(text, images, listener, retryMessageId)
                 ui {
                     if (failed) { rebuild(); return@ui }
                     val cur = current
