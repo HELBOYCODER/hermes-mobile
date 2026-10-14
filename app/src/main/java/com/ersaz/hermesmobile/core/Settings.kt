@@ -97,7 +97,19 @@ class Settings(context: Context) : NousTokenStore {
     var braveKey by str("brave_key", "")
     var bindSharedStorage by bool("bind_storage", false)
     var prootNoSeccomp by bool("proot_no_seccomp", false)
-    var sandboxEnv by str("sandbox_env", "") // KEY=VALUE per line, exported inside the Linux sandbox
+    var sandboxEnv: String
+        @Synchronized get() {
+            val stored = prefs.getString("sandbox_env", "").orEmpty()
+            val value = EnvironmentSecretStore.open(stored)
+            if (stored.isNotEmpty() && !EnvironmentSecretStore.encrypted(stored)) {
+                check(prefs.edit().putString("sandbox_env", EnvironmentSecretStore.seal(value)).commit())
+            }
+            return value
+        }
+        @Synchronized set(value) {
+            check(prefs.edit().putString("sandbox_env", EnvironmentSecretStore.seal(value)).commit())
+            _version.value++
+        }
     var apkMirror by str("apk_mirror", "") // base URL of an Alpine mirror, blank = official CDN
     var busyMode by str("busy_mode", "interrupt") // interrupt | queue — what a new message does while the agent is working
     var fontScale by str("font_scale", "1.0")
@@ -146,9 +158,9 @@ class Settings(context: Context) : NousTokenStore {
     var onboarded by bool("onboarded", false)
 
     /** Parsed [sandboxEnv]: valid names only. */
-    fun envVars(): Map<String, String> = sandboxEnv.lines().mapNotNull { l ->
-        val i = l.indexOf('='); if (i <= 0) null else l.substring(0, i).trim().takeIf { it.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) }?.let { it to l.substring(i + 1).trim().trim('"') }
-    }.toMap()
+    fun envVars(): Map<String, String> = EnvironmentVariables.parse(sandboxEnv)
+
+    fun redactEnvironment(text: String): String = EnvironmentVariables.redact(text, envVars())
 
     fun fontScaleValue(): Float = fontScale.toFloatOrNull()?.coerceIn(0.8f, 1.5f) ?: 1f
 

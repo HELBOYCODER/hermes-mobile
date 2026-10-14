@@ -102,8 +102,8 @@ jobs:
           name: Hermes Mobile ${{ env.APP_VERSION }}
           files: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
           body: |
-            Dashboard password is visible and copyable in Settings → 9Router.
-            Automatically connects OpenCode Free and lists only its free model lane, excluding OpenCode Zen.
-            After Nous/Hermes account login, the full free/premium catalog is loaded automatically, searchable and shown with pricing. Paid access follows account permissions.
-            Full local 9Router server and ARM64 prerequisites remain bundled; voice pause/resume fixes and Bot Mode are included.
+            فارسی: نمایش فارسی و متن ترکیبی در چت، بخش Environment با ذخیرهٔ رمزگذاری‌شده و مقدارهای پنهان، کپی پیام و تلاش مجدد آخرین نوبت ناموفق با حفظ پیوست‌ها.
+            English: Content-based Persian/English paragraph direction, encrypted Environment editor with masked values, copy user messages, and retry the latest failed turn with its attachments.
+            Existing voice pause/resume, Nous account login, Bot Mode, and bundled local 9Router remain included.
+            OpenCode Free inference is not verified. A provider that fails all probes is no longer automatically selected.
             ARM64 only. Online models and speech recognition require internet.

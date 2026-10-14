@@ -148,19 +148,19 @@ class NineRouter(private val rt: HermesRuntime) {
                 val err = a.probe(s.routerKey, m)
                 if (err == null) { working = m; break } else lastErr = err
             }
-            if (selectAsProvider) {
+            if (selectAsProvider && working != null) {
                 rt.modelStore.ensureCurrent("Previous")
-                val pick = working ?: free.first()
+                val pick = working
                 rt.modelStore.select(ModelProfile("9Router · OpenCode Free", "9router", apiUrl, s.routerKey, pick, true, "9router"))
                 s.routerConfigured = true
             }
             say(
-                if (!selectAsProvider) "Ready: ${free.size} OpenCode Free models listed." + (if (catalog.live) "" else " Live catalog unavailable; showing bundled models.")
+                if (!selectAsProvider) "Catalog: ${free.size} OpenCode Free models listed; inference is not verified." + (if (catalog.live) "" else " Live catalog unavailable; showing bundled models.")
                 else if (working != null) "Ready: ${free.size} OpenCode Free models, using $working."
                 else "${free.size} OpenCode Free models listed, but none answered just now (${lastErr ?: "unknown"}). " +
-                    "Free tiers change often — connect your own providers in the 9Router dashboard."
+                    "The current provider was kept. OpenCode may restrict its free tier to its own app; connect a supported provider in the dashboard."
             )
-            return true
+            return !selectAsProvider || working != null
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

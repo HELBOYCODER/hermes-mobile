@@ -80,6 +80,8 @@ fun SettingsScreen(rt: HermesRuntime) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { perm++; refresh++ }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        EnvironmentSettings(s)
+
         SectionTitle("Full access")
         Hint("Hermes works best with nothing in its way. Grant these once and it can read and write your files, run any command, " +
             "use the mic and keep working in the background.")
@@ -291,10 +293,6 @@ fun SettingsScreen(rt: HermesRuntime) {
         Picker("Text size", listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Extra large"), s.fontScale) { s.fontScale = it; refresh++ }
         Picker("When I send while Hermes is working", listOf("interrupt" to "Interrupt and answer me now", "queue" to "Queue it for after the current task"), s.busyMode) { s.busyMode = it; refresh++ }
         Field("Voice input language (BCP-47, e.g. fa-IR, en-US; blank = device)", s.voiceLang) { s.voiceLang = it.trim() }
-
-        SectionTitle("🔑 Sandbox environment variables")
-        Hint("Exported inside the Linux sandbox for every command — API keys for your scripts and tools. One KEY=VALUE per line.")
-        Field("Variables", s.sandboxEnv, singleLine = false) { s.sandboxEnv = it }
 
         SectionTitle("💾 Backup & restore")
         Hint("Saves sessions, memory, skills, bots, MCP servers, schedules and settings to one .zip file. API keys and sign-in tokens are left out unless you include them.")
