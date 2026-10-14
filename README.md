@@ -1,59 +1,85 @@
-# Hermes Mobile — نسخه ۲.۳.۳
+# Hermes Mobile | هرمس موبایل
 
-**اپ اندرویدیِ کاملاً بومیِ [Hermes Agent](https://hermes-agent.nousresearch.com/)** (پروژه‌ی متن‌باز Nous Research، لایسنس MIT)، بدون هیچ ارتباط رسمی با Nous Research.
+**Android · ARM64 · 2.3.3**
 
-هیولای هوش مصنوعی خودت رو روی گوشیت داشته باش — بدون نیاز به سرور، Termux یا روت.
+[**دانلود فایل نصبی / Download APK — 2.3.3**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.3/hermes-mobile-2.3.3-arm64.apk)
 
----
+[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.3.3)
 
-## ✨ امکانات اصلی
+## فارسی
 
-| امکان | توضیح |
-|---|---|
-| 🤖 **حلقه‌ی ایجنت** | فراخوانی ابزارها، قطع کردن (`/steer`)، فشرده‌سازی خودکارِ کانتکست |
-| 🐧 **ترمینال لینوکس داخلی** | کلاینتِ کاملِ Alpine Linux با PRoot، PTY واقعی، تب‌ها و `apk add …` — **بدون روت** |
-| 💻 **CLI درون سندباکس** | دستور `hermes` داخل ترمینال، متصل به ایجنتِ خودِ اپ |
-| 🧠 **حافظه‌ی دائمی** | `MEMORY.md`، `USER.md` و شخصیت `SOUL.md` |
-| 🎓 **اسکیل‌ها** | ۱۹ اسکیلِ آماده با فرمت agentskills.io |
-| ⏰ **زمان‌بند (Cron)** | `every 2h`، `0 9 * * *` و … با ارسال به نوتیفیکیشن یا هر چت |
-| 👥 **Bot Mode** | دسته‌ای از بات‌های نام‌دار؛ هر کدام با چت، آواتار، شخصیت، حافظه و مدلِ مخصوصِ خودشان + چت گروهی و پیامِ بات به بات |
-| 💬 **گیتوی پیام‌رسان‌ها** | تلگرام، دیسکورد و اسلک؛ جلسه‌ی مجزا برای هر چت، لیست دسترسی و تحویلِ فایل/صدا |
-| 🔐 **ورود با Nous Portal** | OAuth بدون نیاز به API key — انتخاب خودکارِ مدل برای اشتراک‌داران و اکانت‌های رایگان |
-| 🎨 **شخصی‌سازی** | ۱۴ شخصیت و ۱۱ پوسته (پیش‌فرض: پوسته‌ی تخت Hermes Desktop) |
-| 🌐 **پروایدرهای متنوع** | Nous Portal، OpenRouter، OpenAI، Anthropic، Gemini، xAI، DeepSeek، Groq، Mistral، Ollama و هر endpoint سازگار با OpenAI |
-| 🎙️ **تایپ صوتی** | دکمه‌ی میکروفون در چت؛ موتور آنلاین گوگل (همان موتورِ پروژه‌ی Sokhan) با انتخاب زبان فارسی / English / تشخیص خودکار |
-| 📎 **پیوست همه‌ی فایل‌ها** | دکمه‌ی «+» → عکس یا فایل با هر فرمت؛ فایل‌ها در `/root/uploads` ذخیره می‌شوند و ایجنت مستقیم کار می‌کند |
-| 🐙 **اتصال به GitHub** | تنظیمات ← GitHub: توکن را بدهید، `git` داخل ترمینال و ابزار `github_api` خودکار وارد می‌شوند |
-| 🔓 **دسترسی کامل** | تنظیمات ← Full access: مجوز فایل‌ها، میکروفون، نوتیف، پس‌زمینه و نصب APK با یک صفحه |
-| 📷 **بینایی و اشتراک‌گذاری** | ارسال تصویر و Share-to-Hermes (هر نوع فایل) از سایر اپ‌ها |
-| 🌍 **حالت WebUI** | کلاینت WebView برای نمونه‌ی راه‌دور، با آپلود فایل |
+هرمس موبایل یک اپ اندرویدی برای گفت‌وگو با ایجنت هوشمند، ابزارها، حافظهٔ ماندگار، اسکیل‌ها و محیط لینوکس داخلی است. این پروژه ارتباط رسمی با Nous Research ندارد.
 
-## 📲 نصب
+### نصب
 
-**فقط معماری arm64** (گوشی‌های مدرن). [فایل APK را از اینجا دانلود کنید](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.3/hermes-mobile-2.3.3-arm64.apk).
+1. فایل APK بالا را روی گوشی ARM64 دانلود کنید و اجازهٔ نصب از این منبع را در تنظیمات اندروید بدهید.
+2. برای Nous/Hermes از داخل برنامه وارد حساب Nous Portal شوید؛ این مسیر به کلید API نیاز ندارد.
+3. مدل را انتخاب کنید. دسترسی به مدل‌های پولی به اشتراک، اعتبار و مجوز حساب شما وابسته است.
+4. برای پنل محلی 9Router، برنامه را باز نگه دارید و به `http://127.0.0.1:20128` بروید. رمز پنل در **Settings → 9Router** قابل نمایش و کپی است.
 
-نصب از منبع ناشناس باید در تنظیمات گوشی مجاز باشد.
+اگر اندروید به‌دلیل تفاوت امضای نسخهٔ قبلی اجازهٔ به‌روزرسانی نداد، پیش از حذف نسخهٔ قبلی از اطلاعات مهم خود پشتیبان بگیرید.
 
-> ⚠️ این نسخه با یک کلیدِ امضای موقت ساخته شده است. اگر نسخه‌ی ۱.۰ قبلی را با کلید دیگری نصب کرده‌اید، اول آن را پاک کنید و بعد این نسخه را نصب کنید.
+### امکانات
 
-## 🔑 تنظیم پروایدر
+- ایجنت، ابزارها، حافظهٔ ماندگار و اسکیل‌ها.
+- Bot Mode با شخصیت، حافظه و مدل برای هر بات.
+- تایپ صوتی با پاز، نگهداری متن تشخیص‌داده‌شده و ادامهٔ ضبط به همان متن.
+- ورود Nous Portal و نمایش کاتالوگ مدل‌های رایگان و پولی.
+- سرور داخلی 9Router و نمایش/کپی رمز داشبورد.
+- Alpine و PRoot همراه Node.js، npm، Python، pip، Git و گواهی‌های TLS.
+- پیوست فایل و تصویر.
 
-پس از اولین اجرا، از تنظیمات یک پروایدر انتخاب کنید و کلید API خود را وارد کنید. Nous Portal و OpenRouter دسترسی به مدل‌های Hermes را می‌دهند.
+نصب Termux یا روت لازم نیست. مدل‌های آنلاین، ورود حساب و تشخیص گفتار به اینترنت نیاز دارند.
 
-> اگر با خطای `HTTP 403 ... Free models are turned off for your account` مواجه شدید: این یک خطای سمتِ پروایدر است، نه اپ. کلیدی که وارد کرده‌اید متعلق به اکانتی است که مدل‌های رایگان در آن فعال نیستند یا اعتبارش تمام شده. به داشبورد همان پروایدر بروید.
+### وضعیت OpenCode Free
 
-## تغییرات ۲.۳.۲
+در نسخهٔ ۲.۳.۳ کاتالوگ OpenCode Free از OpenCode Zen جدا شده است، اما نمایش مدل در فهرست به معنی قابل استفاده بودن آن نیست. خطای گزارش‌شدهٔ `403 FreeTierError` می‌گوید سرویس رایگان فقط از داخل OpenCode قابل استفاده است. موفقیت درخواست واقعی این مدل‌ها از هرمس تأیید نشده است؛ این نسخه رفع آن محدودیت را تضمین نمی‌کند.
 
-- دکمهٔ پاز میکروفن را قطع می‌کند و متنِ تشخیص‌داده‌شده را نگه می‌دارد؛ ضبط دوباره به ادامهٔ همان متن اضافه می‌شود.
-- ارسال متن به پاسخ نهایی سرویس ویس وابسته نیست و پاسخ دیررس، متن جدید را بازنویسی نمی‌کند.
-- Node.js، npm، Python، pip، Git، گواهی‌های TLS و ابزارهای کامپایل در محیط لینوکسِ APK قرار دارند؛ برای نصب روتر نیازی به نصب Termux یا پیش‌نیاز روی خود گوشی نیست. سرور کامل 9Router و SQLite مخصوص ARM64 نیز در APK قرار دارند؛ استفاده از مدل‌های آنلاین و تشخیص گفتار همچنان به اینترنت نیاز دارند.
-- نصب‌های قدیمی از داخل دکمهٔ نصب روتر بررسی و ترمیم می‌شوند.
-- شمارهٔ نسخهٔ داخل برنامه از نسخهٔ واقعی APK خوانده می‌شود.
+### تصاویر داخل برنامه
 
-برای ساخت: ابتدا `scripts/fetch_sandbox.sh`، سپس `scripts/bundle_prerequisites.sh` و در پایان `./gradlew testDebugUnitTest assembleRelease` را اجرا کنید.
+اسکرین‌شات واقعی از این نسخه هنوز به ریپو اضافه نشده است.
 
-پرووایدر Nous/Hermes فقط از ورود حساب Nous Portal استفاده می‌کند و پس از تأیید، به اپ برمی‌گردد. سرور 9Router به‌طور پیش‌فرض همراه برنامه روی `http://127.0.0.1:20128` اجرا می‌شود و اجرای آن پرووایدر انتخابی کاربر را عوض نمی‌کند.
+## English
 
-## تغییرات ۲.۳.۳
+Hermes Mobile is an Android app for AI conversations, agent tools, persistent memory, skills, and an embedded Linux environment. This project is not officially affiliated with Nous Research.
 
-رمز داشبورد 9Router در تنظیمات قابل نمایش و کپی است. اتصال خودکار به OpenCode Free انجام می‌شود و فهرست روتر فقط مدل‌های این سرویس را نشان می‌دهد. بعد از ورود Nous/Hermes، کاتالوگ کامل مدل‌های رایگان و پولی خودکار در انتخاب‌گر نمایش داده می‌شود؛ استفاده از مدل‌های پولی به مجوز حساب وابسته است.
+### Installation
+
+1. Download the ARM64 APK above and allow installation from this source in Android settings.
+2. Sign in to Nous Portal inside the app for the Nous/Hermes provider. This provider uses account login rather than a manually entered API key.
+3. Select a model. Paid access depends on your account subscription, credit, and permissions.
+4. Keep the app open to use the local 9Router dashboard at `http://127.0.0.1:20128`. Display or copy its password in **Settings → 9Router**.
+
+If Android rejects an update because of a signing-key mismatch, back up important data before uninstalling the previous app.
+
+### Features
+
+- Agent tools, persistent memory, and skills.
+- Bot Mode with separate personalities, memories, and models.
+- Voice pause/resume that preserves recognized text and appends new dictation.
+- Nous Portal login with a free and paid model catalog.
+- Embedded 9Router with a visible, copyable dashboard password.
+- Alpine Linux through PRoot, with Node.js, npm, Python, pip, Git, and TLS certificates bundled.
+- File and image attachments.
+
+No Termux installation or root access is required. Online models, account login, and speech recognition require internet access.
+
+### OpenCode Free status
+
+Version 2.3.3 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
+
+### In-app screenshots
+
+Real screenshots of this version have not yet been added.
+
+## Download integrity / صحت فایل
+
+File: `hermes-mobile-2.3.3-arm64.apk`  
+Size: **181,757,807 bytes**  
+SHA-256:
+
+```text
+3f7c5f724e8e538e90278643b4c29c58556625fe8b96af876cd212d01f8aacea
+```
+
+This page links only to the existing 2.3.3 installer. Documentation updates do not represent a new APK release.
