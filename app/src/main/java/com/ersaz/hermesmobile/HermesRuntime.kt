@@ -15,6 +15,8 @@ import com.ersaz.hermesmobile.agent.Session
 import com.ersaz.hermesmobile.agent.SessionStore
 import com.ersaz.hermesmobile.agent.SkillStore
 import com.ersaz.hermesmobile.agent.tools.ToolRegistry
+import com.ersaz.hermesmobile.auth.NousAuth
+import com.ersaz.hermesmobile.auth.NousLogin
 import com.ersaz.hermesmobile.bridge.LocalBridge
 import com.ersaz.hermesmobile.core.Settings
 import com.ersaz.hermesmobile.cron.CronRunner
@@ -44,6 +46,11 @@ class HermesRuntime(val app: Application) {
         .pingInterval(30, TimeUnit.SECONDS)
         .build()
 
+    val nousAuth = NousAuth(http, settings)
+    val nousLogin = NousLogin(this)
+    /** Bearer supplier for Nous Portal OAuth sessions (refreshes on demand). */
+    val nousKeyProvider: suspend (Boolean) -> String? = { force -> nousAuth.accessToken(force) }
+
     val sandbox = Sandbox(app, settings)
     val processes = ProcessRegistry(sandbox)
 
@@ -53,11 +60,23 @@ class HermesRuntime(val app: Application) {
     val memory = MemoryStore(File(hermesHome, "memories"))
     val skills = SkillStore(File(hermesHome, "skills"))
     val cron = CronStore(File(hermesHome, "cron/jobs.json"))
+    val bots = com.ersaz.hermesmobile.bots.BotStore(File(hermesHome, "bots"), memory)
+    val botHub = com.ersaz.hermesmobile.bots.BotHub(this)
+    val log = com.ersaz.hermesmobile.core.AppLog()
+    val backup = com.ersaz.hermesmobile.backup.Backup(app, hermesHome)
+    val usage = com.ersaz.hermesmobile.agent.UsageStore(File(hermesHome, "usage.json"))
+    val dictation = com.ersaz.hermesmobile.service.Dictation(app)
+    val permissions = com.ersaz.hermesmobile.device.Permissions(app)
+    val browser = com.ersaz.hermesmobile.browser.BrowserManager(this)
+    val agentJobs = com.ersaz.hermesmobile.agent.jobs.AgentJobs(this)
+    val mcp = com.ersaz.hermesmobile.mcp.McpManager(this)
     val tools = ToolRegistry(this)
     val speech = Speech(app, File(hermesHome, "audio"))
     val gateway = GatewayManager(this)
     val cronRunner = CronRunner(this)
     val bridge = LocalBridge(this)
+    val modelStore = com.ersaz.hermesmobile.core.ModelStore(settings)
+    val router by lazy { com.ersaz.hermesmobile.router.NineRouter(this) }
 
     init {
         createChannels()
@@ -66,11 +85,27 @@ class HermesRuntime(val app: Application) {
             val soul = File(hermesHome, "SOUL.md")
             if (!soul.exists()) soul.writeText(com.ersaz.hermesmobile.agent.PromptBuilder.DEFAULT_IDENTITY + "\n")
             if (sandbox.payloadAvailable()) sandbox.ensureInstalled()
+            runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
             bridge.start()
+            router.autoStartIfNeeded()
         }
     }
 
-    fun llmClient(): LlmClient = LlmClient(http, settings.baseUrl, settings.apiKey, settings.provider)
+    fun usesNousLogin(): Boolean = settings.provider == "nous" && nousAuth.signedIn
+
+    fun llmClient(): LlmClient =
+        if (settings.provider == "nous") LlmClient(http,
+            com.ersaz.hermesmobile.auth.NousPortal.authenticatedEndpoint(nousAuth.signedIn, settings.baseUrl),
+            "", "nous", nousKeyProvider)
+        else LlmClient(http, settings.baseUrl, settings.apiKey, settings.provider)
+
+    /** Best-effort return to the app after the browser step of a login (blocked by Android 10+ in the background; the notification covers that). */
+    fun bringToFront() {
+        runCatching {
+            app.startActivity(Intent(app, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        }
+    }
 
     /** Cheap side-call (titles, compression summaries) on the auxiliary or main model. */
     suspend fun auxComplete(prompt: String, maxTokens: Int = 1500): String? = try {
@@ -106,6 +141,11 @@ class HermesRuntime(val app: Application) {
 
     private var notifId = 1000
 
+    /** Notification only when the user isn't looking at the app (e.g. after a browser sign-in). */
+    fun notifyIfBackground(title: String, text: String) {
+        if (!com.ersaz.hermesmobile.mcp.AppForeground.inForeground) notify(title, text)
+    }
+
     fun notify(title: String, text: String) {
         val intent = PendingIntent.getActivity(app, 0, Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -123,7 +163,7 @@ class HermesRuntime(val app: Application) {
     companion object {
         const val CH_SERVICE = "hermes_service"
         const val CH_EVENTS = "hermes_events"
-        const val VERSION = "2.0 (Hermes Agent for Android)"
+        val VERSION = "${BuildConfig.VERSION_NAME} (Hermes Agent for Android)"
 
         @Volatile private var instance: HermesRuntime? = null
         fun get(context: Context): HermesRuntime =

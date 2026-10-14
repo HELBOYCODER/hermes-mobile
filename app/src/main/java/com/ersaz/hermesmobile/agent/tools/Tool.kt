@@ -69,6 +69,11 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         Toolset("tts", "Text to speech"),
         Toolset("vision", "Analyze images"),
         Toolset("device", "Android phone features (clipboard, notifications, URLs, battery)"),
+        Toolset("phone", "Drive the phone UI and shell through Shizuku (tap, swipe, type, screenshot, install apps)"),
+        Toolset("github", "GitHub REST API with the token saved in Settings → GitHub"),
+        Toolset("bots", "Bot Mode: hand work to other bots in your roster (@mentions)"),
+        Toolset("mcp", "Tools from connected MCP servers"),
+        Toolset("browser", "Real web browser: navigate, click, type, screenshots"),
     )
 
     val all: List<Tool> by lazy {
@@ -87,18 +92,24 @@ class ToolRegistry(private val runtime: HermesRuntime) {
             TextToSpeechTool(),
             VisionTool(),
             AndroidDeviceTool(),
+            GitHubTool(),
+            PhoneControlTool(),
+            MessageBotTool(),
+            com.ersaz.hermesmobile.browser.BrowserTool(),
+            com.ersaz.hermesmobile.device.PhoneTool(),
+            com.ersaz.hermesmobile.device.WeatherTool(),
         )
     }
 
-    fun byName(name: String) = all.firstOrNull { it.name == name }
+    fun byName(name: String) = all.firstOrNull { it.name == name } ?: runtime.mcp.tools().firstOrNull { it.name == name }
 
-    fun available(enabledToolsets: Set<String>?, depth: Int): List<Tool> {
+    fun available(enabledToolsets: Set<String>?, depth: Int, botDisabledToolsets: Set<String> = emptySet()): List<Tool> {
         val s = runtime.settings
         val disabledSets = s.disabledToolsetSet()
         val disabledTools = s.disabledToolSet()
-        return all.filter { t ->
-            val setOk = enabledToolsets?.contains(t.toolset) ?: (t.toolset !in disabledSets)
-            val subagentBlocked = depth > 0 && t.name in setOf("delegate_task", "clarify", "memory", "send_message", "cronjob")
+        return (all + runtime.mcp.tools()).filter { t ->
+            val setOk = (enabledToolsets?.contains(t.toolset) ?: (t.toolset !in disabledSets)) && t.toolset !in botDisabledToolsets
+            val subagentBlocked = depth > 0 && t.name in setOf("delegate_task", "clarify", "memory", "send_message", "cronjob", "message_bot")
             setOk && t.name !in disabledTools && !subagentBlocked &&
                 !(t.toolset == "memory" && !s.memoryEnabled && !s.userProfileEnabled)
         }

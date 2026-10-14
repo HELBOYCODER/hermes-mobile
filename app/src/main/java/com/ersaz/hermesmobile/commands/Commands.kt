@@ -41,6 +41,8 @@ data class CommandDef(val name: String, val description: String, val category: S
 
 object Commands {
     val defs = listOf(
+        CommandDef("agents", "List sub-agent jobs; /agents cancel <id> stops one", "Tools", "[cancel <id>]"),
+        CommandDef("mcp", "Manage MCP servers: list, add <url|command|json>, login/reconnect/enable/disable/remove <id>", "Tools", "[subcommand]"),
         CommandDef("new", "Start a new session (fresh history)", "Session", aliases = listOf("reset", "clear")),
         CommandDef("retry", "Retry the last message", "Session"),
         CommandDef("undo", "Back up N user turns (default 1)", "Session", "[N]"),
@@ -273,7 +275,7 @@ object Commands {
                 CommandResult.Reply(if (agent.yolo) "⚡ YOLO on — dangerous commands run without approval (this session)." else "🛡️ YOLO off — approvals required.")
             }
             "config" -> CommandResult.Reply(
-                "⚙️ Config\n• provider: ${s.provider}\n• base_url: ${s.baseUrl}\n• model: ${s.model}\n• api_key: ${if (s.apiKey.isBlank()) "(none)" else "••••" + s.apiKey.takeLast(4)}\n" +
+                "⚙️ Config\n• provider: ${s.provider}\n• base_url: ${s.baseUrl}\n• model: ${s.model}\n• api_key: ${if (rt.usesNousLogin()) "Nous Portal login (${s.nousAccount.ifBlank { "signed in" }})" else if (s.apiKey.isBlank()) "(none)" else "••••" + s.apiKey.takeLast(4)}\n" +
                     "• personality: ${s.personality.ifBlank { "none" }}\n• skin: ${s.skin}\n• max_iterations: ${s.maxIterations}\n" +
                     "• context_length: ${s.contextLength}\n• approvals: ${s.approvalMode}\n• disabled toolsets: ${s.disabledToolsets.ifBlank { "none" }}"
             )
@@ -319,15 +321,46 @@ object Commands {
                     else -> CommandResult.Reply("Usage: /skills [list|view|search|delete] <name>")
                 }
             }
-            "memory" -> CommandResult.Reply(
-                "🧠 MEMORY.md (${rt.memory.usage("memory")})\n" + rt.memory.entries("memory").joinToString("\n") { "• $it" }.ifBlank { "(empty)" } +
-                    "\n\n👤 USER.md (${rt.memory.usage("user")})\n" + rt.memory.entries("user").joinToString("\n") { "• $it" }.ifBlank { "(empty)" }
-            )
+            "memory" -> host.agent.memory.let { mem -> CommandResult.Reply(
+                "🧠 MEMORY.md (${mem.usage("memory")})\n" + mem.entries("memory").joinToString("\n") { "• $it" }.ifBlank { "(empty)" } +
+                    "\n\n👤 USER.md (${mem.usage("user")})\n" + mem.entries("user").joinToString("\n") { "• $it" }.ifBlank { "(empty)" }
+            ) }
+            "agents" -> {
+                val jobs = rt.agentJobs
+                if (arg.startsWith("cancel")) {
+                    val j = jobs.forSession(session.id).firstOrNull { it.id.startsWith(arg.removePrefix("cancel").trim()) }
+                    CommandResult.Reply(if (j == null) "No such job." else if (jobs.cancel(j)) "Cancelling ${j.id}…" else "Already finished.")
+                } else CommandResult.Reply(jobs.forSession(session.id).joinToString("\n") { "• ${it.id} ${it.agentName} — ${it.state.name.lowercase()} ${it.elapsedSec}s: ${it.task.take(60)}" }
+                    .ifBlank { "No sub-agent jobs in this conversation." })
+            }
+            "mcp" -> mcp(arg, rt)
             "cron" -> cron(arg, host)
             "platforms" -> CommandResult.Reply(rt.gateway.statusText())
             "version" -> CommandResult.Reply("☤ Hermes Agent for Android ${HermesRuntime.VERSION}\nSandbox: Alpine Linux on PRoot (${if (rt.sandbox.isInstalled()) "installed" else "not installed"})")
             "whoami" -> CommandResult.Reply("Platform: ${host.platform}\nChat: ${host.chatKey ?: "local"}\nSession: ${session.id}")
             else -> CommandResult.Reply("/${def.name} is not available here.")
+        }
+    }
+
+    private fun mcp(arg: String, rt: HermesRuntime): CommandResult {
+        val sub = arg.substringBefore(' ').lowercase()
+        val rest = arg.substringAfter(' ', "").trim()
+        val m = rt.mcp
+        fun line(s: com.ersaz.hermesmobile.mcp.McpServer) = "• ${s.id} — " + when (val st = m.statusOf(s.id)) {
+            is com.ersaz.hermesmobile.mcp.McpStatus.Connected -> "✅ ${st.tools} tools"
+            is com.ersaz.hermesmobile.mcp.McpStatus.NeedsAuth -> "🔑 needs sign-in (/mcp login ${s.id})"
+            is com.ersaz.hermesmobile.mcp.McpStatus.Failed -> "❌ ${st.message.take(100)}"
+            is com.ersaz.hermesmobile.mcp.McpStatus.Connecting -> "⏳ ${st.step}"
+            com.ersaz.hermesmobile.mcp.McpStatus.Disabled, null -> if (s.enabled) "…" else "⏸ disabled"
+        } + "\n   ${s.summary.take(80)}"
+        return when (sub) {
+            "", "list" -> CommandResult.Reply(m.servers().joinToString("\n") { line(it) }.ifBlank { "No MCP servers. Add one: /mcp add https://… (or open MCP servers in the menu)." })
+            "add" -> { val r = m.addFromInput(rest); CommandResult.Reply(r.error ?: "Added ${r.ids.joinToString()} — connecting (it will open the sign-in page if needed).") }
+            "login", "signin" -> if (m.store.get(rest) == null) CommandResult.Reply("No server '$rest'.") else { m.signInAsync(rest); CommandResult.Reply("Opening sign-in for $rest…") }
+            "reconnect", "retry" -> if (m.store.get(rest) == null) CommandResult.Reply("No server '$rest'.") else { m.reconnectAsync(rest); CommandResult.Reply("Reconnecting $rest…") }
+            "enable", "disable" -> if (m.store.get(rest) == null) CommandResult.Reply("No server '$rest'.") else { m.setEnabled(rest, sub == "enable"); CommandResult.Reply("$rest ${sub}d.") }
+            "remove", "delete" -> if (m.store.get(rest) == null) CommandResult.Reply("No server '$rest'.") else { m.remove(rest); CommandResult.Reply("Removed $rest.") }
+            else -> CommandResult.Reply("Usage: /mcp [list | add <url|command|json> | login <id> | reconnect <id> | enable <id> | disable <id> | remove <id>]")
         }
     }
 

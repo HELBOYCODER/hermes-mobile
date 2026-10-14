@@ -1,6 +1,7 @@
 package com.ersaz.hermesmobile.agent
 
 import com.ersaz.hermesmobile.HermesRuntime
+import com.ersaz.hermesmobile.bots.Bot
 import com.ersaz.hermesmobile.agent.tools.ToolContext
 import com.ersaz.hermesmobile.core.parseArgs
 import com.ersaz.hermesmobile.llm.LlmClient
@@ -31,6 +32,8 @@ class Agent(
     val platform: String = "app",
     private val enabledToolsets: Set<String>? = null, // null = settings-driven
     val depth: Int = 0, // subagent nesting
+    /** Bot Mode profile this agent runs as; null = the default Hermes. */
+    val bot: Bot? = null,
 ) {
     @Volatile var interrupted = false
         private set
@@ -42,6 +45,12 @@ class Agent(
     /** Commands approved for the rest of this session ("always" answers). */
     val sessionApprovals = mutableSetOf<String>()
     var yolo = false
+    /** Bots already involved in this bot-to-bot chain (loop guard for message_bot). */
+    var botChain: List<String> = emptyList()
+
+    val botId: String get() = bot?.id ?: Bot.DEFAULT_ID
+    /** The memory this agent reads and writes: its own for a bot, the shared one for default Hermes. */
+    val memory get() = runtime.bots.memoryFor(bot)
 
     fun interrupt() {
         interrupted = true
@@ -50,14 +59,17 @@ class Agent(
 
     fun steer(text: String) { steerQueue += text }
 
-    fun model(): String = session.modelOverride?.ifBlank { null } ?: runtime.settings.model
+    fun model(): String = session.modelOverride?.ifBlank { null }
+        ?: bot?.model?.ifBlank { null } ?: runtime.settings.model
 
-    fun tools() = runtime.tools.available(enabledToolsets, depth)
+    fun tools() = runtime.tools.available(enabledToolsets, depth, bot?.disabledToolsets.orEmpty().toSet())
+        .filter { it.name != "message_bot" || runtime.bots.all().size > 1 } // nobody to message in a one-bot roster
 
     /** Run one user turn through the tool-calling loop. Returns the final assistant text. */
     suspend fun runTurn(userText: String, images: List<String> = emptyList(), listener: AgentListener): String {
         interrupted = false
         running = true
+        if (depth == 0) runtime.botHub.setRunning(botId, true)
         try {
             val settings = runtime.settings
             if (session.systemPrompt == null) {
@@ -68,11 +80,14 @@ class Agent(
             runtime.sessions.save(session)
 
             val client = runtime.llmClient().also { llm = it }
+            runtime.mcp.awaitReady() // MCP servers may still be connecting right after launch
             val toolList = tools()
             val toolSchemas = runtime.tools.schemas(toolList)
             var finalText = ""
             var iteration = 0
             val maxIter = settings.maxIterations.coerceIn(1, 500)
+            val loopDetector = ToolLoopDetector()
+            var loopStop = false
 
             while (true) {
                 if (interrupted) { finalText = finalText.ifBlank { "⏹ Interrupted." }; break }
@@ -132,11 +147,21 @@ class Agent(
                     } catch (e: Exception) {
                         "{\"error\":\"${(e.message ?: e.toString()).replace("\"", "'")}\"}"
                     }
-                    val capped = com.ersaz.hermesmobile.core.truncateMiddle(result, 60_000)
+                    var capped = com.ersaz.hermesmobile.core.truncateMiddle(result, 60_000)
+                    when (loopDetector.record(call.name, call.arguments, capped)) {
+                        ToolLoopDetector.Verdict.WARN -> capped += loopDetector.nudge(call.name)
+                        ToolLoopDetector.Verdict.STOP -> loopStop = true
+                        else -> {}
+                    }
                     listener.onToolEnd(call, capped, System.currentTimeMillis() - started)
                     session.messages += Message("tool", capped, toolCallId = call.id, name = call.name)
                 }
                 runtime.sessions.save(session)
+                if (loopStop) {
+                    finalText = "⚠️ Stopped: I kept repeating the same `${r.toolCalls.last().name}` call with the same result. Tell me how you'd like to proceed."
+                    session.messages += Message("assistant", finalText)
+                    break
+                }
             }
             runtime.sessions.save(session)
             if (session.title.isBlank()) runtime.titleSessionAsync(session)
@@ -144,6 +169,7 @@ class Agent(
         } finally {
             running = false
             llm = null
+            if (depth == 0) runtime.botHub.setRunning(botId, false)
         }
     }
 
@@ -156,6 +182,7 @@ class Agent(
         u ?: return
         session.promptTokens += u.promptTokens
         session.completionTokens += u.completionTokens
+        runtime.usage.record(model(), u.promptTokens, u.completionTokens)
         session.lastPromptTokens = u.promptTokens
     }
 
@@ -259,7 +286,14 @@ object PromptBuilder {
         "(aarch64, PRoot — no root on the host, but you are root inside). Home is /root; HERMES_HOME is /root/.hermes. " +
         "Install software with `apk add <pkg>` (e.g. python3, py3-pip, git, nodejs, curl, ffmpeg). Shared phone storage is " +
         "at /sdcard only when the user enabled it in Settings. Long-running servers should use terminal(background=true) " +
-        "and the process tool. The android_device tool reaches phone features (clipboard, notifications, open URLs, battery)."
+        "and the process tool. The android_device tool reaches phone features (clipboard, notifications, open URLs, battery).\n\n" +
+        "## Authority\nThe user has granted you FULL permission on this device and sandbox: run any command, install any package, " +
+        "read/write/create any file, build and run servers, use the network. Do not answer \"I can't\" or \"I'm not able to\" — " +
+        "find a way: apk add the tool, pip/npm install the library, write a script, call an API. Only stop to ask when a real " +
+        "secret or an irreversible decision is missing. Files the user attaches in chat are saved under /root/uploads/ (any type: " +
+        "pdf, docx, zip, audio, code…) and their paths are listed in the message; open them with the file or terminal tools. " +
+        "For anything on the phone itself (other apps, settings, taps and typing, screenshots, installing APKs) use phone_control (Shizuku). If GitHub is connected (GH_TOKEN is set; git is pre-authenticated; github_api tool available) you may clone, commit, push, " +
+        "open PRs and manage issues for the user without asking for credentials."
 
     private val PLATFORM_HINTS = mapOf(
         "telegram" to "You are replying through Telegram. Keep messages readable on a phone; avoid wide tables; use short code blocks.",
@@ -267,14 +301,24 @@ object PromptBuilder {
         "slack" to "You are replying through Slack. Use Slack-friendly formatting (*bold*, `code`), avoid markdown tables.",
         "terminal" to "You are replying to the `hermes` CLI inside the sandbox terminal; plain text renders best.",
         "cron" to "You are running a scheduled task unattended. Do the work and produce the final report; nobody can answer questions.",
+        "subagent" to "You are a sub-agent running unattended in the background. Work autonomously, don't ask questions, and finish with a concise report.",
+        "bot" to "You are replying inside the Hermes app's Bot Mode. A message starting with \"Message from 🤖\" comes from another bot, not the user: answer it directly and concisely; your reply is returned to that bot automatically.",
     )
 
     fun build(runtime: HermesRuntime, agent: Agent): String {
         val s = runtime.settings
         val home = runtime.hermesHome
         val parts = mutableListOf<String>()
-        val soul = java.io.File(home, "SOUL.md").takeIf { it.exists() }?.readText()?.trim()
+        val bot = agent.bot
+        val soul = if (bot != null && !bot.isDefault) bot.soul.trim().ifBlank { null }
+            else java.io.File(home, "SOUL.md").takeIf { it.exists() }?.readText()?.trim()
         parts += soul?.ifBlank { null } ?: DEFAULT_IDENTITY
+        if (bot != null && !bot.isDefault) {
+            parts += "## Your bot identity\nYou are ${bot.name} (@${bot.id})" +
+                (if (bot.title.isNotBlank()) ", ${bot.title}" else "") + "." +
+                (if (bot.description.isNotBlank()) " ${bot.description}" else "") +
+                " You are one bot in a roster of Hermes agents, each with its own memory and chat."
+        }
         Personalities.resolve(s.personality)?.let { parts += "## Personality\n$it" }
         if (s.customSystemPrompt.isNotBlank()) parts += s.customSystemPrompt.trim()
 
@@ -287,8 +331,10 @@ object PromptBuilder {
         if ("terminal" in toolNames) parts += ENVIRONMENT
         PLATFORM_HINTS[agent.platform]?.let { parts += it }
 
-        if (s.memoryEnabled) runtime.memory.promptBlock("memory")?.let { parts += it }
-        if (s.userProfileEnabled) runtime.memory.promptBlock("user")?.let { parts += it }
+        if (s.memoryEnabled) agent.memory.promptBlock("memory")?.let { parts += it }
+        if (s.userProfileEnabled) agent.memory.promptBlock("user")?.let { parts += it }
+        if ("message_bot" in toolNames) runtime.botHub.rosterPrompt(agent)?.let { parts += it }
+        if ("delegate_task" in toolNames) runtime.agentJobs.roster()?.let { parts += it }
         if ("skill_view" in toolNames) runtime.skills.indexBlock()?.let { parts += it }
 
         // Project context files, like Hermes loading AGENTS.md from the working directory.
@@ -303,9 +349,10 @@ object PromptBuilder {
 
     /** Per-call suffix that must not be frozen into the cached prompt (todo list state). */
     fun volatileSuffix(runtime: HermesRuntime, agent: Agent): String {
+        val mcp = runtime.mcp.promptBlock()?.let { "\n\n$it" }.orEmpty()
         val todos = agent.session.todos
-        if (todos.isEmpty()) return ""
-        return "\n\n## Current task list\n" + todos.joinToString("\n") { t ->
+        if (todos.isEmpty()) return mcp
+        return mcp + "\n\n## Current task list\n" + todos.joinToString("\n") { t ->
             val box = when (t.status) { "completed" -> "[x]"; "in_progress" -> "[>]"; "cancelled" -> "[-]"; else -> "[ ]" }
             "$box ${t.id}. ${t.content}"
         }

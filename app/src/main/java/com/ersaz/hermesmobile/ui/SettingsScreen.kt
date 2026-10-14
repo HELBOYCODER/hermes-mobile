@@ -1,6 +1,8 @@
 package com.ersaz.hermesmobile.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
@@ -17,6 +19,7 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +51,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.ersaz.hermesmobile.sandbox.GitHubLink
 import com.ersaz.hermesmobile.BuildConfig
 import com.ersaz.hermesmobile.HermesRuntime
 import com.ersaz.hermesmobile.agent.Personalities
@@ -64,35 +72,165 @@ fun SettingsScreen(rt: HermesRuntime) {
     var refresh by remember { mutableIntStateOf(0) }
     var models by remember { mutableStateOf<List<String>>(emptyList()) }
     var modelMsg by remember { mutableStateOf("") }
+    var ghMsg by remember { mutableStateOf("") }
+    var perm by remember { mutableIntStateOf(0) }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm++ }
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm++ }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { perm++; refresh++ }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        SectionTitle("Full access")
+        Hint("Hermes works best with nothing in its way. Grant these once and it can read and write your files, run any command, " +
+            "use the mic and keep working in the background.")
+        Toggle("Run commands without asking", s.approvalMode == "off",
+            "Skips the dangerous-command prompt. Turn off if you want a confirmation every time.") {
+            s.approvalMode = if (it) "off" else "manual"; refresh++
+        }
+        val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+        val filesOk = android.os.Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()
+        val micOk = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val notifOk = android.os.Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        val batteryOk = pm?.isIgnoringBatteryOptimizations(ctx.packageName) == true
+        val installOk = ctx.packageManager.canRequestPackageInstalls()
+        fun open(intent: Intent) { runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+        val pkg = Uri.parse("package:${ctx.packageName}")
+        key(perm) {
+            PermissionRow("All files access", "Read/write anywhere on phone storage (/sdcard)", filesOk) {
+                s.bindSharedStorage = true
+                open(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkg))
+            }
+            PermissionRow("Microphone", "Voice typing in chat", micOk) { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+            PermissionRow("Notifications", "Results of scheduled tasks and background jobs", notifOk) {
+                if (android.os.Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            PermissionRow("Run in background", "Don't let Android freeze Hermes (bots, cron)", batteryOk) {
+                open(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+            }
+            PermissionRow("Install apps", "Lets the agent install an APK it built or downloaded", installOk) {
+                open(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, pkg))
+            }
+        }
+
+        SectionTitle("GitHub")
+        Hint("Paste a personal access token (github.com → Settings → Developer settings → Tokens; scopes: repo, workflow, gist, read:org). " +
+            "It stays on this phone. Once connected, git in the terminal is already signed in (clone, commit, push) and the agent can use the GitHub API, " +
+            "open pull requests and manage issues for you.")
+        key(refresh) {
+            Field("Personal access token", s.githubToken, secret = true) { s.githubToken = it.trim() }
+            Field("GitHub username", s.githubUser) { s.githubUser = it.trim() }
+            Field("Commit author name", s.githubName) { s.githubName = it.trim() }
+            Field("Commit author email", s.githubEmail) { s.githubEmail = it.trim() }
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                if (s.githubToken.isBlank()) { ghMsg = "Paste a token first."; return@Button }
+                ghMsg = "Checking…"
+                scope.launch {
+                    GitHubLink.verify(rt.http, s.githubToken).fold(
+                        onSuccess = { acc ->
+                            if (s.githubUser.isBlank()) s.githubUser = acc.login
+                            if (s.githubName.isBlank()) s.githubName = acc.name
+                            if (s.githubEmail.isBlank()) s.githubEmail = acc.email
+                            GitHubLink.apply(rt.sandbox, s)
+                            ghMsg = "Connected as ${acc.login}. git is signed in."
+                            refresh++
+                        },
+                        onFailure = { ghMsg = "Failed: ${it.message}" },
+                    )
+                }
+            }) { Text("Save & connect") }
+            OutlinedButton(onClick = {
+                s.githubToken = ""; scope.launch { GitHubLink.apply(rt.sandbox, s) }; ghMsg = "Disconnected."; refresh++
+            }) { Text("Disconnect") }
+        }
+        if (ghMsg.isNotBlank()) Text(ghMsg, color = if (ghMsg.startsWith("Failed")) skin.error else skin.label, fontSize = 12.5.sp,
+            modifier = Modifier.padding(top = 6.dp))
+
+        SectionTitle("9Router — free AI router")
+        Hint("Runs 9Router inside Hermes' Linux sandbox so every app on this phone can use one OpenAI-compatible endpoint " +
+            "(${s.routerHost}:${s.routerPort}) while Hermes is open. Its server and runtime are bundled; connect it to select 9Router and fetch free models.")
+        val rState by rt.router.state.collectAsState()
+        val rMsg by rt.router.message.collectAsState()
+        val rLog by rt.router.log.collectAsState()
+        Text("Status: " + when (rState) {
+            com.ersaz.hermesmobile.router.NineRouter.State.NOT_INSTALLED -> "not installed"
+            com.ersaz.hermesmobile.router.NineRouter.State.INSTALLING -> "installing…"
+            com.ersaz.hermesmobile.router.NineRouter.State.STOPPED -> "installed, stopped"
+            com.ersaz.hermesmobile.router.NineRouter.State.STARTING -> "starting…"
+            com.ersaz.hermesmobile.router.NineRouter.State.RUNNING -> "running at ${rt.router.apiUrl}"
+            com.ersaz.hermesmobile.router.NineRouter.State.ERROR -> "error"
+        }, color = skin.label, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+        val busy = rState == com.ersaz.hermesmobile.router.NineRouter.State.INSTALLING || rState == com.ersaz.hermesmobile.router.NineRouter.State.STARTING
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = !busy, onClick = { scope.launch { rt.router.installAndSetup(); refresh++ } }) {
+                Text(if (rt.router.installed()) "Set up & select" else "Install 9Router")
+            }
+            if (rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING) {
+                OutlinedButton(onClick = { scope.launch { rt.router.stop() } }) { Text("Stop") }
+            } else if (rt.router.installed()) {
+                OutlinedButton(enabled = !busy, onClick = { scope.launch { rt.router.start() } }) { Text("Start") }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+            OutlinedButton(enabled = rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING,
+                onClick = { scope.launch { rt.router.refreshFreeModels(selectAsProvider = false); refresh++ } }) { Text("Refresh free models") }
+            OutlinedButton(enabled = rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING,
+                onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(rt.router.dashboardUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("Dashboard") }
+        }
+        Toggle("Start with the app", s.routerAutoStart, "Starts 9Router whenever Hermes opens") { s.routerAutoStart = it; refresh++ }
+        key(refresh) {
+            Field("IP / host", s.routerHost) { s.routerHost = it.trim().ifBlank { "127.0.0.1" } }
+            Field("Port", s.routerPort.toString(), number = true) { it.toIntOrNull()?.let { v -> s.routerPort = v } }
+            Field("9Router API key (auto-created)", s.routerKey, secret = true) { s.routerKey = it.trim() }
+        }
+        if (rMsg.isNotBlank()) Text(rMsg, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp))
+        if (rLog.isNotBlank()) Text(rLog.takeLast(1200), color = skin.dim, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).background(skin.surface, androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).padding(8.dp))
+
+        SectionTitle("Phone control (Shizuku)")
+        Hint("Lets the agent operate the phone like a person: open apps, tap, swipe, type, take screenshots and install APKs. " +
+            "Install Shizuku, start it once (wireless debugging), then grant Hermes permission here.")
+        val shizuku = com.ersaz.hermesmobile.agent.tools.PhoneShell.status(ctx)
+        Text("Shizuku: " + when (shizuku) {
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.READY -> "ready ✓"
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NEEDS_PERMISSION -> "running — permission needed"
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NOT_RUNNING -> "installed, not running"
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NOT_INSTALLED -> "not installed"
+        }, color = if (shizuku == com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.READY) skin.ok else skin.label,
+            fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (shizuku == com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NEEDS_PERMISSION)
+                Button(onClick = { com.ersaz.hermesmobile.agent.tools.PhoneShell.requestPermission(); perm++ }) { Text("Grant permission") }
+            OutlinedButton(onClick = { com.ersaz.hermesmobile.agent.tools.PhoneShell.openShizuku(ctx) }) {
+                Text(if (shizuku == com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NOT_INSTALLED) "Get Shizuku" else "Open Shizuku")
+            }
+        }
+
         SectionTitle("🤖 Model provider")
-        Hint("Any OpenAI-compatible endpoint works. Nous Portal and OpenRouter give access to Hermes models; local servers (Ollama, LM Studio) on your LAN work too.")
+        Hint("Any OpenAI-compatible endpoint works. Sign in to Nous Portal (free models included) or paste an API key for OpenRouter, OpenAI and others; local servers (Ollama, LM Studio) on your LAN work too.")
         Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
             val p = Providers.byId(id)
             s.provider = id
-            if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
-            if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
+            // A signed-in Nous account keeps the route/model picked at login.
+            if (!(id == "nous" && rt.nousAuth.signedIn)) {
+                if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
+                if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
+            }
             refresh++
         }
         key(refresh) {
-            Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-            Field("API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            val nousLogin = s.provider == "nous"
+            if (nousLogin) NousLoginCard(rt)
+            if (!nousLogin) {
+                Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
+                Field("API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            } else Hint("Hermes connects through Nous Portal account login and returns to this app after approval.")
             Field("Model", s.model) { s.model = it.trim() }
         }
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedButton(onClick = {
-                modelMsg = "Loading…"
-                scope.launch {
-                    models = runCatching { rt.llmClient().listModels() }.getOrElse { modelMsg = "Failed: ${it.message}"; emptyList() }
-                    if (models.isNotEmpty()) modelMsg = "${models.size} models"
-                }
-            }) { Text("Fetch models") }
-            Text("  $modelMsg", color = skin.dim, fontSize = 12.sp)
-        }
-        if (models.isNotEmpty()) {
-            Picker("Pick model", models.take(400).map { it to it }, s.model) { s.model = it; refresh++ }
-        }
+        var pickModel by remember { mutableStateOf(false) }
+        OutlinedButton(onClick = { pickModel = true }) { Text("Browse models (free ones marked)") }
+        if (pickModel) ModelPickerDialog(rt, s.model, onPick = { rt.useModel(it); pickModel = false; refresh++ }, onDismiss = { pickModel = false })
         Field("Auxiliary model (titles, compression; blank = main)", s.auxModel) { s.auxModel = it.trim() }
         Field("Context length (tokens)", s.contextLength.toString(), number = true) { it.toIntOrNull()?.let { v -> s.contextLength = v } }
         Field("Max tool iterations per turn", s.maxIterations.toString(), number = true) { it.toIntOrNull()?.let { v -> s.maxIterations = v } }
@@ -131,16 +269,65 @@ fun SettingsScreen(rt: HermesRuntime) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { scope.launch { rt.sandbox.reinstall() } }) { Text("Reinstall rootfs") }
         }
+        var mirrorMsg by remember { mutableStateOf("") }
+        Picker("Package mirror (apk)", APK_MIRRORS, s.apkMirror) { s.apkMirror = it; refresh++; scope.launch { mirrorMsg = applyApkMirror(rt, it) } }
+        if (mirrorMsg.isNotBlank()) Text(mirrorMsg, color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         Text("Rootfs: ${rt.sandbox.rootfs.absolutePath}", color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+
+        SectionTitle("🎨 Appearance & input")
+        Picker("Text size", listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Extra large"), s.fontScale) { s.fontScale = it; refresh++ }
+        Picker("When I send while Hermes is working", listOf("interrupt" to "Interrupt and answer me now", "queue" to "Queue it for after the current task"), s.busyMode) { s.busyMode = it; refresh++ }
+        Field("Voice input language (BCP-47, e.g. fa-IR, en-US; blank = device)", s.voiceLang) { s.voiceLang = it.trim() }
+
+        SectionTitle("🔑 Sandbox environment variables")
+        Hint("Exported inside the Linux sandbox for every command — API keys for your scripts and tools. One KEY=VALUE per line.")
+        Field("Variables", s.sandboxEnv, singleLine = false) { s.sandboxEnv = it }
+
+        SectionTitle("💾 Backup & restore")
+        Hint("Saves sessions, memory, skills, bots, MCP servers, schedules and settings to one .zip file. API keys and sign-in tokens are left out unless you include them.")
+        var includeSecrets by remember { mutableStateOf(false) }
+        var backupMsg by remember { mutableStateOf("") }
+        Toggle("Include API keys & tokens", includeSecrets, "Anyone with the file can use them — keep it private") { includeSecrets = it }
+        val backupSaver = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            if (uri != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                backupMsg = try { ctx.contentResolver.openOutputStream(uri)!!.use { rt.backup.export(it, includeSecrets) }.let { "Saved backup ($it files)." } } catch (e: Exception) { "Backup failed: ${e.message}" }
+            }
+        }
+        val backupLoader = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                backupMsg = try { ctx.contentResolver.openInputStream(uri)!!.use { rt.backup.import(it) }.let { "Restored $it files. Restart the app to apply everything." } } catch (e: Exception) { "Restore failed: ${e.message}" }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { backupSaver.launch("hermes-backup-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())}.zip") }) { Text("Back up…") }
+            OutlinedButton(onClick = { backupLoader.launch(arrayOf("application/zip", "application/octet-stream")) }) { Text("Restore…") }
+        }
+        if (backupMsg.isNotBlank()) Text(backupMsg, color = skin.dim, fontSize = 12.sp)
 
         SectionTitle("🌐 Remote Hermes WebUI")
         Hint("Optional: the original WebView mode for a self-hosted Hermes WebUI (LAN, Tailscale, or public URL).")
         Field("WebUI URL", s.webUiUrl.ifBlank { BuildConfig.HERMES_URL }) { s.webUiUrl = it.trim() }
 
+        var updateMsg by remember { mutableStateOf("") }
+        OutlinedButton(onClick = { updateMsg = "Checking…"; scope.launch { updateMsg = checkForUpdate(rt) } }) { Text("Check for updates") }
+        if (updateMsg.isNotBlank()) Text(updateMsg, color = skin.dim, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
         Text("Hermes Agent for Android ${HermesRuntime.VERSION}\nPort of NousResearch/hermes-agent (MIT). Sandbox: Alpine Linux + PRoot.",
             color = skin.dim, fontSize = 11.sp)
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun PermissionRow(title: String, hint: String, granted: Boolean, onGrant: () -> Unit) {
+    val skin = LocalSkin.current
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = skin.text, fontSize = 15.sp)
+            Text(hint, color = skin.dim, fontSize = 12.sp)
+        }
+        if (granted) Text("Granted", color = skin.ok, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+        else Button(onClick = onGrant) { Text("Grant") }
     }
 }
 

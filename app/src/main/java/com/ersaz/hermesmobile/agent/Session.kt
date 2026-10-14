@@ -97,6 +97,7 @@ class Session(
     var compressions: Int = 0,
     val todos: MutableList<TodoItem> = mutableListOf(),
     var modelOverride: String? = null,
+    var botId: String? = null, // which Bot Mode profile this belongs to (null = the plain app chat)
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("title", title).put("source", source).put("chat_key", chatKey)
@@ -109,6 +110,7 @@ class Session(
             todos.forEach { a.put(JSONObject().put("id", it.id).put("content", it.content).put("status", it.status)) }
         })
         .put("model_override", modelOverride)
+        .put("bot_id", botId)
 
     fun displayTitle(): String = title.ifBlank {
         messages.firstOrNull { it.role == "user" }?.content?.lineSequence()?.firstOrNull()?.take(60)
@@ -142,12 +144,16 @@ class Session(
                     TodoItem(it.optString("id"), it.optString("content"), it.optString("status", "pending"))
                 }?.toMutableList() ?: mutableListOf(),
                 modelOverride = o.optStringOrNull("model_override"),
+                botId = o.optStringOrNull("bot_id"),
             )
         }
     }
 }
 
-data class SessionSummary(val id: String, val title: String, val source: String, val updatedAt: Long, val messageCount: Int)
+data class SessionSummary(
+    val id: String, val title: String, val source: String, val updatedAt: Long, val messageCount: Int,
+    val botId: String? = null, val chatKey: String? = null, val preview: String = "", val previewRole: String = "",
+)
 
 /** Sessions persisted as JSON files under $HERMES_HOME/sessions (Hermes uses SQLite+FTS5; files keep this simple). */
 class SessionStore(private val dir: File) {
@@ -182,7 +188,11 @@ class SessionStore(private val dir: File) {
         .mapNotNull { f ->
             try {
                 val s = cache[f.nameWithoutExtension] ?: Session.fromJson(JSONObject(f.readText()))
-                SessionSummary(s.id, s.displayTitle(), s.source, s.updatedAt, s.messages.count { it.role == "user" || it.role == "assistant" })
+                val last = s.messages.lastOrNull { (it.role == "user" || it.role == "assistant") && it.content.isNotBlank() }
+                SessionSummary(
+                    s.id, s.displayTitle(), s.source, s.updatedAt, s.messages.count { it.role == "user" || it.role == "assistant" },
+                    s.botId, s.chatKey, last?.content?.replace('\n', ' ')?.take(140).orEmpty(), last?.role.orEmpty(),
+                )
             } catch (_: Exception) { null }
         }
         .sortedByDescending { it.updatedAt }

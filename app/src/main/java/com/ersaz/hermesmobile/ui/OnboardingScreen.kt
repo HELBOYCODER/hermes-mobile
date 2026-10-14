@@ -18,7 +18,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.key
 import com.ersaz.hermesmobile.HermesRuntime
 import com.ersaz.hermesmobile.llm.Providers
@@ -31,19 +33,28 @@ fun OnboardingScreen(rt: HermesRuntime, done: () -> Unit) {
     val s = rt.settings
     var refresh by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Banner()
+        Spacer(Modifier.height(32.dp))
+        Text(skin.symbol, color = skin.accent, fontSize = 44.sp)
+        Text("Welcome to ${skin.agentName}", color = skin.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 8.dp))
         SectionTitle("Set up Hermes")
-        Hint("Pick a model provider and paste its API key. Keys stay on this phone. You can change everything later in Settings.")
+        Hint("Easiest: sign in with your Nous Portal account. Free accounts get free models automatically — no API key needed. Or pick another provider and paste its key; keys stay on this phone.")
+        NousLoginCard(rt)
+        SectionTitle("Provider (Hermes uses account login)")
         Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
             val p = Providers.byId(id)
             s.provider = id
-            if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
-            if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
+            if (!(id == "nous" && rt.nousAuth.signedIn)) {
+                if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
+                if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
+            }
             refresh++
         }
         key(refresh) {
-            Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-            Field("API key", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            if (s.provider != "nous") {
+                Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
+                Field("API key", s.apiKey, secret = true) { s.apiKey = it.trim() }
+            }
             Field("Model", s.model) { s.model = it.trim() }
         }
         Spacer(Modifier.height(12.dp))
