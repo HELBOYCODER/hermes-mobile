@@ -37,6 +37,7 @@ class ModelStore(private val settings: Settings) {
         settings.modelProfiles = JSONArray().also { a -> list.forEach { a.put(it.toJson()) } }.toString()
     }
 
+    @Synchronized
     fun upsert(p: ModelProfile) {
         val l = all().toMutableList()
         val i = l.indexOfFirst { it.id == p.id }
@@ -44,16 +45,19 @@ class ModelStore(private val settings: Settings) {
         save(l)
     }
 
+    @Synchronized
     fun upsertAll(ps: List<ModelProfile>) {
         val l = all().associateBy { it.id }.toMutableMap()
         ps.forEach { l[it.id] = it }
         save(l.values.toList())
     }
 
+    @Synchronized
     fun remove(id: String) = save(all().filter { it.id != id })
 
     /** Replace every entry that came from [source] (used when the 9Router free list is refreshed). */
-    fun replaceSource(source: String, ps: List<ModelProfile>) = save(all().filter { it.source != source } + ps)
+    @Synchronized
+    fun replaceSource(source: String, ps: List<ModelProfile>) = save(replaceModelSource(all(), source, ps))
 
     fun isActive(p: ModelProfile) = settings.baseUrl.trimEnd('/') == p.baseUrl.trimEnd('/') && settings.model == p.model
 
@@ -66,6 +70,7 @@ class ModelStore(private val settings: Settings) {
     }
 
     /** Keep the currently configured model in the list so it can always be switched back to. */
+    @Synchronized
     fun ensureCurrent(label: String) {
         if (settings.model.isBlank() || settings.baseUrl.isBlank()) return
         val cur = ModelProfile(label, settings.provider, settings.baseUrl, settings.apiKey, settings.model)
@@ -79,4 +84,10 @@ fun nousCatalogProfiles(models: List<com.ersaz.hermesmobile.llm.ModelInfo>): Lis
         if (m.id == com.ersaz.hermesmobile.auth.NousSetup.WELCOME_MODEL) com.ersaz.hermesmobile.auth.NousPortal.WELCOME
         else com.ersaz.hermesmobile.auth.NousPortal.INFERENCE,
         "", m.id, m.free, "nous-catalog", m.priceLabel())
+}
+
+/** Prefer fresh catalog metadata without producing duplicate LazyColumn keys. */
+fun replaceModelSource(existing: List<ModelProfile>, source: String, incoming: List<ModelProfile>): List<ModelProfile> {
+    val ids = incoming.map { it.id }.toSet()
+    return existing.filter { it.source != source && it.id !in ids } + incoming.distinctBy { it.id }
 }

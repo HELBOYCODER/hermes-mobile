@@ -9,6 +9,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NousCatalogTest {
+    @Test fun refreshingNousCatalogDoesNotDuplicatePreviouslySavedCurrentModel() {
+        val saved = ModelProfile("Current", "nous", NousPortal.INFERENCE, "", "model-1")
+        val unrelated = ModelProfile("Other", "custom", "http://local/v1", "", "other")
+        val catalog = nousCatalogProfiles(listOf(ModelInfo("model-1", "Model 1", 128000, 0.0, 0.0, true, false)))
+        val result = com.ersaz.hermesmobile.core.replaceModelSource(listOf(saved, unrelated), "nous-catalog", catalog)
+        assertEquals(2, result.size)
+        assertEquals(1, result.count { it.id == saved.id })
+        assertTrue(result.single { it.id == saved.id }.free)
+        assertTrue(result.contains(unrelated))
+    }
+
     @Test fun completeCatalogRetainsFreeAndPremiumModelsWithoutTruncation() {
         val models = (0..600).map { i ->
             ModelInfo("model-$i", "Model $i", 128000, if (i % 2 == 0) 0.0 else 0.000001,
