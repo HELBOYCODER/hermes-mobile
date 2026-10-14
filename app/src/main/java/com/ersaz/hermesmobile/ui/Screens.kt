@@ -81,12 +81,13 @@ fun Hint(text: String) {
 
 /** Flat filled text field: no outline, soft surface fill (Hermes Desktop style). */
 @Composable
-fun Field(label: String, value: String, secret: Boolean = false, number: Boolean = false, singleLine: Boolean = true, onChange: (String) -> Unit) {
+fun Field(label: String, value: String, secret: Boolean = false, number: Boolean = false, singleLine: Boolean = true, readOnly: Boolean = false, onChange: (String) -> Unit) {
     val skin = LocalSkin.current
     var v by remember(value) { mutableStateOf(value) }
     val none = Color.Transparent
     TextField(
         value = v,
+        readOnly = readOnly,
         onValueChange = { v = it; onChange(it) },
         label = { Text(label) },
         singleLine = singleLine,

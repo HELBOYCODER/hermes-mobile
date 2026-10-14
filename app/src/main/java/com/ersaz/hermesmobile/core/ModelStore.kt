@@ -11,16 +11,17 @@ data class ModelProfile(
     val apiKey: String,
     val model: String,
     val free: Boolean = false,
-    val source: String = "manual", // manual | fetched | 9router
+    val source: String = "manual", // manual | fetched | 9router | nous-catalog
+    val priceLabel: String = "",
 ) {
     val id get() = "$baseUrl|$model"
     fun toJson() = JSONObject().put("label", label).put("provider", providerId).put("base_url", baseUrl)
-        .put("api_key", apiKey).put("model", model).put("free", free).put("source", source)
+        .put("api_key", apiKey).put("model", model).put("free", free).put("source", source).put("price_label", priceLabel)
 
     companion object {
         fun fromJson(o: JSONObject) = ModelProfile(
             o.optString("label"), o.optString("provider", "custom"), o.optString("base_url"), o.optString("api_key"),
-            o.optString("model"), o.optBoolean("free"), o.optString("source", "manual"),
+            o.optString("model"), o.optBoolean("free"), o.optString("source", "manual"), o.optString("price_label"),
         )
     }
 }
@@ -70,4 +71,12 @@ class ModelStore(private val settings: Settings) {
         val cur = ModelProfile(label, settings.provider, settings.baseUrl, settings.apiKey, settings.model)
         if (all().none { it.id == cur.id }) upsert(cur)
     }
+}
+
+/** Preserve the complete account catalog even if login selected a free/default route. */
+fun nousCatalogProfiles(models: List<com.ersaz.hermesmobile.llm.ModelInfo>): List<ModelProfile> = models.map { m ->
+    ModelProfile("Nous / Hermes", "nous",
+        if (m.id == com.ersaz.hermesmobile.auth.NousSetup.WELCOME_MODEL) com.ersaz.hermesmobile.auth.NousPortal.WELCOME
+        else com.ersaz.hermesmobile.auth.NousPortal.INFERENCE,
+        "", m.id, m.free, "nous-catalog", m.priceLabel())
 }

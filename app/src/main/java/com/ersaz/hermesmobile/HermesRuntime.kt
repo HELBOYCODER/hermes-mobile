@@ -99,6 +99,18 @@ class HermesRuntime(val app: Application) {
             "", "nous", nousKeyProvider)
         else LlmClient(http, settings.baseUrl, settings.apiKey, settings.provider)
 
+    suspend fun refreshNousModels(): List<com.ersaz.hermesmobile.llm.ModelInfo> {
+        val endpoint = com.ersaz.hermesmobile.auth.NousPortal.authenticatedEndpoint(nousAuth.signedIn,
+            com.ersaz.hermesmobile.auth.NousPortal.INFERENCE)
+        val catalog = LlmClient(http, endpoint, "", "nous", nousKeyProvider).listModelInfo().toMutableList()
+        if (settings.nousRoute == "welcome" && catalog.none { it.id == com.ersaz.hermesmobile.auth.NousSetup.WELCOME_MODEL }) {
+            catalog += com.ersaz.hermesmobile.llm.ModelInfo(com.ersaz.hermesmobile.auth.NousSetup.WELCOME_MODEL,
+                "Nous Welcome", 128_000, 0.0, 0.0, true, false)
+        }
+        modelStore.replaceSource("nous-catalog", com.ersaz.hermesmobile.core.nousCatalogProfiles(catalog))
+        return catalog
+    }
+
     /** Best-effort return to the app after the browser step of a login (blocked by Android 10+ in the background; the notification covers that). */
     fun bringToFront() {
         runCatching {
