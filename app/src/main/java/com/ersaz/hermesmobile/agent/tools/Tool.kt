@@ -69,6 +69,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         Toolset("tts", "Text to speech"),
         Toolset("vision", "Analyze images"),
         Toolset("device", "Android phone features (clipboard, notifications, URLs, battery)"),
+        Toolset("phone", "Drive the phone UI and shell through Shizuku (tap, swipe, type, screenshot, install apps)"),
         Toolset("github", "GitHub REST API with the token saved in Settings → GitHub"),
     )
 
@@ -89,6 +90,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
             VisionTool(),
             AndroidDeviceTool(),
             GitHubTool(),
+            PhoneControlTool(),
         )
     }
 

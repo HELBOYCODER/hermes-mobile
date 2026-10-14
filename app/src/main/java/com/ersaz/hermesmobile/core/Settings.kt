@@ -91,6 +91,17 @@ class Settings(context: Context) {
     // --- Voice input --------------------------------------------------------
     var voiceLang by str("voice_lang", "fa-IR") // fa-IR | en-US | auto
 
+    // --- 9Router (local AI router running in the sandbox) -------------------
+    var routerHost by str("router_host", "127.0.0.1")
+    var routerPort by int("router_port", 20128)
+    var routerAutoStart by bool("router_autostart", true)
+    var routerPassword by str("router_password", "")
+    var routerKey by str("router_key", "")
+    var routerConfigured by bool("router_configured", false)
+
+    // --- Saved models / providers shown in the chat model picker (JSON array) ---
+    var modelProfiles by str("model_profiles", "[]")
+
     // --- GitHub -------------------------------------------------------------
     var githubToken by str("github_token", "")
     var githubUser by str("github_user", "")

@@ -145,7 +145,9 @@ fun ChatScreen(vm: ChatViewModel) {
             if (vm.busy) item { Spinner() }
         }
 
-        if (vm.runtime.settings.showStatusBar) StatusLine(vm)
+        var showModels by remember { mutableStateOf(false) }
+        StatusLine(vm) { showModels = true }
+        if (showModels) ModelPickerSheet(vm) { showModels = false }
 
         // Slash-command autocomplete (Hermes CLI completion menu)
         if (vm.input.startsWith("/") && !vm.input.contains(' ')) {
@@ -218,7 +220,7 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
     val skin = LocalSkin.current
     var menu by remember { mutableStateOf(false) }
     val hasAttachments = vm.pendingImages.isNotEmpty() || vm.pendingFiles.isNotEmpty()
-    val canSend = vm.input.isNotBlank() || hasAttachments
+    val canSend = vm.input.isNotBlank() || hasAttachments || vm.listening
 
     Surface(
         Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
@@ -246,7 +248,7 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (vm.input.isEmpty()) {
-                            Text(if (vm.listening) "Listening…" else "Message ${skin.agentName.substringBefore(' ')}, or type /help",
+                            Text(if (vm.listening) "Listening… tap ■ to stop, ↑ to send" else if (vm.transcribing) "Processing voice…" else "Message ${skin.agentName.substringBefore(' ')}, or type /help",
                                 color = skin.dim, fontSize = 16.sp)
                         }
                         inner()
@@ -269,7 +271,10 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
                 }
                 LangChip(vm)
                 Spacer(Modifier.weight(1f))
-                MicButton(vm.listening, onMic)
+                if (vm.listening || vm.transcribing) {
+                    IconButton(onClick = { vm.cancelVoice() }) { Icon(Icons.Default.Close, "cancel recording", tint = skin.dim) }
+                }
+                MicButton(vm.listening, vm.transcribing, onMic)
                 Spacer(Modifier.width(2.dp))
                 if (vm.busy && !canSend) {
                     RoundButton(skin.selection, skin.error, Icons.Default.Stop, "stop") { vm.stop() }
@@ -297,11 +302,15 @@ private fun LangChip(vm: ChatViewModel) {
 }
 
 @Composable
-private fun MicButton(listening: Boolean, onClick: () -> Unit) {
+private fun MicButton(listening: Boolean, transcribing: Boolean, onClick: () -> Unit) {
     val skin = LocalSkin.current
     val pulse = rememberInfiniteTransition(label = "mic")
     val a by pulse.animateFloat(1f, 0.45f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "micAlpha")
-    if (listening) {
+    if (transcribing) {
+        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = skin.accent, strokeWidth = 2.dp)
+        }
+    } else if (listening) {
         Box(
             Modifier.size(40.dp).alpha(a).clip(CircleShape).background(skin.error).clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
@@ -466,15 +475,19 @@ private fun Spinner() {
 }
 
 @Composable
-private fun StatusLine(vm: ChatViewModel) {
+private fun StatusLine(vm: ChatViewModel, onModel: () -> Unit) {
     val skin = LocalSkin.current
     val pct = vm.contextPct
     val color = when { pct >= 85 -> skin.error; pct >= 60 -> skin.warn; else -> skin.dim }
-    Text(
-        "${vm.agent.model().substringAfterLast('/')}  ·  ctx $pct%",
-        color = color, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-    )
+    @Suppress("UNUSED_VARIABLE") val rev = vm.modelRev
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "${vm.agent.model().substringAfterLast('/')}  ▾",
+            color = skin.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(10.dp)).clickable(onClick = onModel).padding(horizontal = 10.dp, vertical = 4.dp),
+        )
+        if (vm.runtime.settings.showStatusBar) Text("  ·  ctx $pct%", color = color, fontSize = 11.sp)
+    }
 }
 
 /** Downscale a picked image and encode it as a data: URI for vision models. */

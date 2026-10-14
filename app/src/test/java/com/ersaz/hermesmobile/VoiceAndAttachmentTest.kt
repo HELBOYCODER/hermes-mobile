@@ -41,3 +41,30 @@ class VoiceAndAttachmentTest {
         assertEquals("512 B", formatSize(512))
     }
 }
+
+class VoiceStopTest {
+    @Test
+    fun finalTranscriptWins() {
+        val (t, e) = VoiceInput.resolveText(Result.success(" hello world "), StreamText("hi", ""))
+        assertEquals("hello world", t); assertEquals(null, e)
+    }
+
+    @Test
+    fun stuckServerFallsBackToLiveText() {
+        // finish() timed out -> result == null; what was already recognised must not be lost
+        val (t, e) = VoiceInput.resolveText(null, StreamText("salam", "donya"))
+        assertEquals("salam donya", t); assertEquals(null, e)
+    }
+
+    @Test
+    fun failedSessionWithLiveTextStillReturnsText() {
+        val (t, e) = VoiceInput.resolveText(Result.failure(java.io.IOException("stalled")), StreamText("ok", ""))
+        assertEquals("ok", t); assertEquals(null, e)
+    }
+
+    @Test
+    fun silenceGivesAHelpfulError() {
+        val (t, e) = VoiceInput.resolveText(null, StreamText("", ""))
+        assertEquals("", t); assertTrue(e!!.contains("No speech"))
+    }
+}

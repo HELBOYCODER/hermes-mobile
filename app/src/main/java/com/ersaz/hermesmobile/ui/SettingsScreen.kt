@@ -19,6 +19,7 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -144,6 +146,66 @@ fun SettingsScreen(rt: HermesRuntime) {
         }
         if (ghMsg.isNotBlank()) Text(ghMsg, color = if (ghMsg.startsWith("Failed")) skin.error else skin.label, fontSize = 12.5.sp,
             modifier = Modifier.padding(top = 6.dp))
+
+        SectionTitle("9Router — free AI router")
+        Hint("Runs 9Router inside Hermes' Linux sandbox so every app on this phone can use one OpenAI-compatible endpoint " +
+            "(${s.routerHost}:${s.routerPort}) while Hermes is open. One tap installs it, starts it, makes it Hermes' provider and fetches the free models.")
+        val rState by rt.router.state.collectAsState()
+        val rMsg by rt.router.message.collectAsState()
+        val rLog by rt.router.log.collectAsState()
+        Text("Status: " + when (rState) {
+            com.ersaz.hermesmobile.router.NineRouter.State.NOT_INSTALLED -> "not installed"
+            com.ersaz.hermesmobile.router.NineRouter.State.INSTALLING -> "installing…"
+            com.ersaz.hermesmobile.router.NineRouter.State.STOPPED -> "installed, stopped"
+            com.ersaz.hermesmobile.router.NineRouter.State.STARTING -> "starting…"
+            com.ersaz.hermesmobile.router.NineRouter.State.RUNNING -> "running at ${rt.router.apiUrl}"
+            com.ersaz.hermesmobile.router.NineRouter.State.ERROR -> "error"
+        }, color = skin.label, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+        val busy = rState == com.ersaz.hermesmobile.router.NineRouter.State.INSTALLING || rState == com.ersaz.hermesmobile.router.NineRouter.State.STARTING
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = !busy, onClick = { scope.launch { rt.router.installAndSetup(); refresh++ } }) {
+                Text(if (rt.router.installed()) "Set up & select" else "Install 9Router")
+            }
+            if (rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING) {
+                OutlinedButton(onClick = { scope.launch { rt.router.stop() } }) { Text("Stop") }
+            } else if (rt.router.installed()) {
+                OutlinedButton(enabled = !busy, onClick = { scope.launch { rt.router.start() } }) { Text("Start") }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+            OutlinedButton(enabled = rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING,
+                onClick = { scope.launch { rt.router.refreshFreeModels(selectAsProvider = false); refresh++ } }) { Text("Refresh free models") }
+            OutlinedButton(enabled = rState == com.ersaz.hermesmobile.router.NineRouter.State.RUNNING,
+                onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(rt.router.dashboardUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("Dashboard") }
+        }
+        Toggle("Start with the app", s.routerAutoStart, "Starts 9Router whenever Hermes opens") { s.routerAutoStart = it; refresh++ }
+        key(refresh) {
+            Field("IP / host", s.routerHost) { s.routerHost = it.trim().ifBlank { "127.0.0.1" } }
+            Field("Port", s.routerPort.toString(), number = true) { it.toIntOrNull()?.let { v -> s.routerPort = v } }
+            Field("9Router API key (auto-created)", s.routerKey, secret = true) { s.routerKey = it.trim() }
+        }
+        if (rMsg.isNotBlank()) Text(rMsg, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp))
+        if (rLog.isNotBlank()) Text(rLog.takeLast(1200), color = skin.dim, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).background(skin.surface, androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).padding(8.dp))
+
+        SectionTitle("Phone control (Shizuku)")
+        Hint("Lets the agent operate the phone like a person: open apps, tap, swipe, type, take screenshots and install APKs. " +
+            "Install Shizuku, start it once (wireless debugging), then grant Hermes permission here.")
+        val shizuku = com.ersaz.hermesmobile.agent.tools.PhoneShell.status(ctx)
+        Text("Shizuku: " + when (shizuku) {
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.READY -> "ready ✓"
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NEEDS_PERMISSION -> "running — permission needed"
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NOT_RUNNING -> "installed, not running"
+            com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NOT_INSTALLED -> "not installed"
+        }, color = if (shizuku == com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.READY) skin.ok else skin.label,
+            fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (shizuku == com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NEEDS_PERMISSION)
+                Button(onClick = { com.ersaz.hermesmobile.agent.tools.PhoneShell.requestPermission(); perm++ }) { Text("Grant permission") }
+            OutlinedButton(onClick = { com.ersaz.hermesmobile.agent.tools.PhoneShell.openShizuku(ctx) }) {
+                Text(if (shizuku == com.ersaz.hermesmobile.agent.tools.PhoneShell.Status.NOT_INSTALLED) "Get Shizuku" else "Open Shizuku")
+            }
+        }
 
         SectionTitle("🤖 Model provider")
         Hint("Any OpenAI-compatible endpoint works. Nous Portal and OpenRouter give access to Hermes models; local servers (Ollama, LM Studio) on your LAN work too.")

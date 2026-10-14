@@ -58,6 +58,8 @@ class HermesRuntime(val app: Application) {
     val gateway = GatewayManager(this)
     val cronRunner = CronRunner(this)
     val bridge = LocalBridge(this)
+    val modelStore = com.ersaz.hermesmobile.core.ModelStore(settings)
+    val router by lazy { com.ersaz.hermesmobile.router.NineRouter(this) }
 
     init {
         createChannels()
@@ -68,6 +70,7 @@ class HermesRuntime(val app: Application) {
             if (sandbox.payloadAvailable()) sandbox.ensureInstalled()
             runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
             bridge.start()
+            router.autoStartIfNeeded()
         }
     }
 

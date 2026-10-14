@@ -32,6 +32,7 @@ object Providers {
         Provider("mistral", "Mistral", "https://api.mistral.ai/v1", "mistral-large-latest", "key"),
         Provider("ollama", "Ollama (LAN/local)", "http://192.168.1.10:11434/v1", "hermes3", "(none)"),
         Provider("lmstudio", "LM Studio (LAN/local)", "http://192.168.1.10:1234/v1", "local-model", "(none)"),
+        Provider("9router", "9Router (local on this phone)", "http://127.0.0.1:20128/v1", "", "(auto-created)"),
         Provider("custom", "Custom OpenAI-compatible endpoint", "", "", "key"),
     )
 

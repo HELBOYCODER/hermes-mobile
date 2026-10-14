@@ -265,7 +265,7 @@ object PromptBuilder {
         "find a way: apk add the tool, pip/npm install the library, write a script, call an API. Only stop to ask when a real " +
         "secret or an irreversible decision is missing. Files the user attaches in chat are saved under /root/uploads/ (any type: " +
         "pdf, docx, zip, audio, code…) and their paths are listed in the message; open them with the file or terminal tools. " +
-        "If GitHub is connected (GH_TOKEN is set; git is pre-authenticated; github_api tool available) you may clone, commit, push, " +
+        "For anything on the phone itself (other apps, settings, taps and typing, screenshots, installing APKs) use phone_control (Shizuku). If GitHub is connected (GH_TOKEN is set; git is pre-authenticated; github_api tool available) you may clone, commit, push, " +
         "open PRs and manage issues for the user without asking for credentials."
 
     private val PLATFORM_HINTS = mapOf(

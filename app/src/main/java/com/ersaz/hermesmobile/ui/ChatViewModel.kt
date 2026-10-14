@@ -75,6 +75,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     // --- voice dictation (Google online speech engine, ported from Sokhan) ---
     var voiceLang by mutableStateOf(VoiceLang.fromCode(runtime.settings.voiceLang)); private set
     var listening by mutableStateOf(false); private set
+    /** True between "stop" and the transcript arriving. */
+    var transcribing by mutableStateOf(false); private set
+    private var sendWhenDone = false
     var voiceError by mutableStateOf<String?>(null)
     private var voiceBase = ""
     private var voice: VoiceInput? = null
@@ -92,23 +95,38 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     fun toggleVoice() {
         val v = voice
         if (listening && v != null) { v.stop(); return }
+        if (transcribing) return
         voiceError = null
         voiceBase = input
         val lang = voiceLang
         val engine = VoiceInput(
             onText = { t: StreamText -> ui { input = joinWithBase(VoiceInput.preview(t, lang)) } },
+            onProcessing = { on -> ui { transcribing = on; if (on) listening = false } },
             onDone = { final, err ->
                 ui {
                     if (final.isNotBlank()) input = joinWithBase(final)
                     if (err != null) voiceError = err
                     listening = false
+                    transcribing = false
                     voice = null
+                    if (sendWhenDone) { sendWhenDone = false; if (final.isNotBlank() || input.isNotBlank()) send() }
                 }
             },
         )
         voice = engine
+        sendWhenDone = false
         listening = true
         engine.start(lang)
+    }
+
+    /** X next to the mic: throw the recording away. */
+    fun cancelVoice() {
+        sendWhenDone = false
+        voice?.cancel()
+        listening = false
+        transcribing = false
+        voice = null
+        input = voiceBase
     }
 
     override fun onCleared() { voice?.cancel(); super.onCleared() }
@@ -160,6 +178,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         contextPct = (ctx * 100 / runtime.settings.contextLength.coerceAtLeast(1)).toInt()
     }
 
+    /** The picker changed provider/model: drop any per-session override and refresh the header. */
+    fun modelChanged() { agent.session.modelOverride = null; refreshMeta(); modelRev++ }
+    var modelRev by mutableStateOf(0); private set
+
     override fun isBusy() = busy
 
     override fun newSession(): Agent {
@@ -206,8 +228,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         val text = input.trim()
         val images = pendingImages.toList()
         val files = pendingFiles.toList()
+        if (listening || transcribing) {
+            // Send pressed while dictating: finish the recording, then send what was said.
+            sendWhenDone = true
+            voice?.stop()
+            return
+        }
         if (text.isEmpty() && images.isEmpty() && files.isEmpty()) return
-        if (listening) voice?.stop()
         input = ""
         pendingImages.clear()
         pendingFiles.clear()
