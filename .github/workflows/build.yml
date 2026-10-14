@@ -70,22 +70,37 @@ jobs:
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleRelease -PHERMES_URL="${HERMES_URL:-}"
 
-      - name: Name versioned APK
-        run: cp app/build/outputs/apk/release/app-release.apk hermes-mobile-2.3.2-arm64.apk
+      - name: Verify version and name APK
+        run: |
+          APP_VERSION=$(sed -n 's/.*versionName "\(.*\)".*/\1/p' app/build.gradle)
+          APP_VERSION_CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' app/build.gradle)
+          BADGING=$($ANDROID_HOME/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/release/app-release.apk)
+          grep -F "versionName='$APP_VERSION'" <<< "$BADGING"
+          grep -F "versionCode='$APP_VERSION_CODE'" <<< "$BADGING"
+          cp app/build/outputs/apk/release/app-release.apk "hermes-mobile-$APP_VERSION-arm64.apk"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: hermes-mobile-2.3.2-arm64
-          path: hermes-mobile-2.3.2-arm64.apk
+          name: hermes-mobile-${{ env.APP_VERSION }}-arm64
+          path: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
 
       - if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.3.2
+          tag_name: v${{ env.APP_VERSION }}
           target_commitish: ${{ github.sha }}
-          name: Hermes Mobile 2.3.2
-          files: hermes-mobile-2.3.2-arm64.apk
+          name: Hermes Mobile ${{ env.APP_VERSION }}
+          files: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
           body: |
             Immediate voice pause, resume into the existing draft, and send without waiting for the speech server.
             Bundled ARM64 Linux prerequisites and one-tap 9Router installation/repair.

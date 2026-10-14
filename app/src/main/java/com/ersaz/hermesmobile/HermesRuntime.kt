@@ -127,7 +127,7 @@ class HermesRuntime(val app: Application) {
     companion object {
         const val CH_SERVICE = "hermes_service"
         const val CH_EVENTS = "hermes_events"
-        const val VERSION = "2.0 (Hermes Agent for Android)"
+        val VERSION = "${BuildConfig.VERSION_NAME} (Hermes Agent for Android)"
 
         @Volatile private var instance: HermesRuntime? = null
         fun get(context: Context): HermesRuntime =
