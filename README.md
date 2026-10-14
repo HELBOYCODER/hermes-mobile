@@ -1,94 +1,39 @@
-# Hermes Mobile — Hermes Agent for Android
+# Hermes Mobile — نسخه ۲.۱
 
-A native Android port of [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT):
-the self-improving agent with persistent memory, skills, cron, subagents and a multi-platform
-**bot mode**, plus a built-in **Linux sandbox terminal**. You don't need Termux or root: Alpine Linux runs
-inside the app through PRoot, the same approach [OpenMinis](https://github.com/OpenMinis/openminis) uses.
+**اپ اندرویدیِ کاملاً بومیِ [Hermes Agent](https://hermes-agent.nousresearch.com/)** (پروژه‌ی متن‌باز Nous Research، لایسنس MIT)، بدون هیچ ارتباط رسمی با Nous Research.
 
-Not affiliated with Nous Research. Open source, no Play Store, no analytics SDKs.
+هیولای هوش مصنوعی خودت رو روی گوشیت داشته باش — بدون نیاز به سرور، Termux یا روت.
 
-## Features
+---
 
-| Hermes feature | On Android |
+## ✨ امکانات اصلی
+
+| امکان | توضیح |
 |---|---|
-| Agent loop with tool calling, interrupts, `/steer`, max-iterations summary, auto context compression | ✅ |
-| **Sandbox terminal**: Alpine Linux (aarch64) on PRoot, real PTY, tabs, extra-keys row, `apk add …` | ✅ |
-| `hermes` CLI **inside** the sandbox (`hermes`, `hermes "prompt"`, `hermes /status`), backed by the app's agent | ✅ |
-| Tools: `terminal`, `process`, `read_file`, `write_file`, `patch`, `search_files`, `web_search`, `web_extract`, `memory`, `skills_list`, `skill_view`, `skill_manage`, `todo`, `session_search`, `cronjob`, `delegate_task`, `send_message`, `clarify`, `text_to_speech`, `vision_analyze` + `android_device` (clipboard, notifications, open URL, battery) | ✅ |
-| Toolsets you can enable or disable, dangerous-command approvals (`/approve`, `/deny`, `/yolo`) | ✅ |
-| Persistent memory: `MEMORY.md` / `USER.md` (§-delimited, char budgets, frozen snapshot), `SOUL.md` persona | ✅ |
-| Skills: `~/.hermes/skills/<cat>/<name>/SKILL.md` (agentskills.io format), `/<skill>` invocation, 19 bundled skills | ✅ |
-| Sessions: persisted, searchable (`session_search`), resumable, auto-titled, exportable | ✅ |
-| Cron scheduler: `30m`, `every 2h`, `0 9 * * *`, ISO time; delivered to a notification or any chat | ✅ |
-| **Bot mode / gateway**: Telegram, Discord, Slack (Socket Mode). Per-chat sessions, DM pairing codes, allowlists, home channels (`/sethome`), tool-progress messages, file and voice delivery | ✅ |
-| ~40 slash commands shared by the app, the CLI and the bots (`/help` lists them) | ✅ |
-| 14 personalities (`/personality`), 9 skins with their palettes, spinner faces and branding (`/skin`) | ✅ |
-| Providers: Nous Portal, OpenRouter, OpenAI, Anthropic, Gemini, xAI, DeepSeek, Groq, Mistral, Ollama/LM Studio, any OpenAI-compatible URL | ✅ |
-| Image input (vision), share-to-Hermes from other apps | ✅ |
-| Original remote **WebUI** mode (WebView), now with working file uploads | ✅ |
-| WhatsApp, Signal and Email gateways; voice transcription; Docker/SSH/Modal backends; MCP servers | ❌ not ported. They need bridges or daemons that don't fit on a phone. |
+| 🤖 **حلقه‌ی ایجنت** | فراخوانی ابزارها، قطع کردن (`/steer`)، فشرده‌سازی خودکارِ کانتکست |
+| 🐧 **ترمینال لینوکس داخلی** | کلاینتِ کاملِ Alpine Linux با PRoot، PTY واقعی، تب‌ها و `apk add …` — **بدون روت** |
+| 💻 **CLI درون سندباکس** | دستور `hermes` داخل ترمینال، متصل به ایجنتِ خودِ اپ |
+| 🧠 **حافظه‌ی دائمی** | `MEMORY.md`، `USER.md` و شخصیت `SOUL.md` |
+| 🎓 **اسکیل‌ها** | ۱۹ اسکیلِ آماده با فرمت agentskills.io |
+| ⏰ **زمان‌بند (Cron)** | `every 2h`، `0 9 * * *` و … با ارسال به نوتیفیکیشن یا هر چت |
+| 👥 **Bot Mode** | دسته‌ای از بات‌های نام‌دار؛ هر کدام با چت، آواتار، شخصیت، حافظه و مدلِ مخصوصِ خودشان + چت گروهی و پیامِ بات به بات |
+| 💬 **گیتوی پیام‌رسان‌ها** | تلگرام، دیسکورد و اسلک؛ جلسه‌ی مجزا برای هر چت، لیست دسترسی و تحویلِ فایل/صدا |
+| 🔐 **ورود با Nous Portal** | OAuth بدون نیاز به API key — انتخاب خودکارِ مدل برای اشتراک‌داران و اکانت‌های رایگان |
+| 🎨 **شخصی‌سازی** | ۱۴ شخصیت و ۹ پوسته |
+| 🌐 **پروایدرهای متنوع** | Nous Portal، OpenRouter، OpenAI، Anthropic، Gemini، xAI، DeepSeek، Groq، Mistral، Ollama و هر endpoint سازگار با OpenAI |
+| 📷 **بینایی و اشتراک‌گذاری** | ارسال تصویر و Share-to-Hermes از سایر اپ‌ها |
+| 🌍 **حالت WebUI** | کلاینت WebView برای نمونه‌ی راه‌دور، با آپلود فایل |
 
-## How the sandbox works
+## 📲 نصب
 
-* `scripts/fetch_sandbox.sh` downloads Termux's prebuilt **PRoot** with its loader, `libtalloc` and
-  `libandroid-shmem`, and the **Alpine minirootfs**. It then rewrites the ELF dependencies with
-  `patchelf`, so the binaries load from the APK instead of a Termux install.
-* Android 10+ only allows `exec()` from the app's `nativeLibraryDir`. PRoot and its loader therefore
-  ship as `lib*.so` files (with `useLegacyPackaging`), and the loader maps guest binaries itself.
-* On first launch the rootfs is unpacked into the app's private storage. `HERMES_HOME` is
-  `/root/.hermes` inside it, so the shell, the agent tools and the app all see the same files.
-* The `hermes` command in the sandbox talks to the app over a localhost bridge
-  (`127.0.0.1:8642`, random bearer token).
+**فقط معماری arm64** (گوشی‌های مدرن). [فایل APK را از اینجا دانلود کنید](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.1-botmode/hermes-mobile-2.1-arm64-release.apk).
 
-## Build
+نصب از منبع ناشناس باید در تنظیمات گوشی مجاز باشد.
 
-Requirements: JDK 17, Android SDK 35, `curl`, `ar`, `patchelf` (`pip install patchelf`).
+> ⚠️ این نسخه با یک کلیدِ امضای موقت ساخته شده است. اگر نسخه‌ی ۱.۰ قبلی را با کلید دیگری نصب کرده‌اید، اول آن را پاک کنید و بعد این نسخه را نصب کنید.
 
-```bash
-./scripts/fetch_sandbox.sh          # PRoot + Alpine rootfs (not committed; the build checks for them)
-./gradlew testDebugUnitTest         # unit tests
-./gradlew assembleDebug             # → app/build/outputs/apk/debug/app-debug.apk
-```
+## 🔑 تنظیم پروایدر
 
-Signed release build:
+پس از اولین اجرا، از تنظیمات یک پروایدر انتخاب کنید و کلید API خود را وارد کنید. Nous Portal و OpenRouter دسترسی به مدل‌های Hermes را می‌دهند.
 
-```bash
-export KEYSTORE_PATH=$PWD/release.keystore KEYSTORE_PASSWORD=... KEY_ALIAS=hermes KEY_PASSWORD=...
-./gradlew assembleRelease
-```
-
-The APK is **arm64-v8a only**, because the sandbox binaries are aarch64. That covers practically
-every phone from the last several years.
-
-### GitHub Actions
-
-The *Build APK* workflow runs on pushes to `main`, on tags and on pull requests. It fetches the
-sandbox, runs the tests and builds a signed release APK. Add the secrets `KEYSTORE_BASE64`,
-`KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` (see `scripts/make-keystore.sh`). Without them,
-a throwaway keystore is used. `HERMES_URL` is optional: it only pre-fills the Remote WebUI screen.
-Push a `v*` tag to get a GitHub Release with the APK attached.
-
-## First run
-
-1. Pick a provider and paste an API key. Nous Portal or OpenRouter give you the Hermes models.
-2. **Chat**: talk to Hermes; type `/` for commands.
-3. **Terminal**: the sandbox installs itself (about 4 MB). Try `apk add python3`, then run `hermes`.
-4. **Bot mode**: paste a Telegram/Discord/Slack token and switch it on. When an unknown user DMs the
-   bot, they get a pairing code; approve it in the app. Send `/sethome` in a chat to make it the
-   cron delivery target.
-5. Turn off battery optimization (button in Bot mode) so the gateway keeps running in the
-   background.
-
-## راهنمای کوتاه (فارسی)
-
-* این اپ نسخهٔ بومی اندروید **Hermes Agent** است: حافظهٔ دائمی، اسکیل‌ها، زمان‌بندی (cron)، ساب‌ایجنت و **حالت ربات** (تلگرام، دیسکورد، اسلک).
-* **ترمینال sandbox** داخل خود اپ است (Alpine Linux روی PRoot) و به Termux یا روت نیازی ندارد. با `apk add` بسته نصب کنید و با دستور `hermes` داخل ترمینال با ایجنت حرف بزنید.
-* برای بیلد: اول `./scripts/fetch_sandbox.sh` و بعد `./gradlew assembleDebug`.
-* در اولین اجرا provider و کلید API را وارد کنید. بعد از بخش Bot mode توکن ربات تلگرام را بگذارید و حالت ربات را روشن کنید.
-
-## License
-
-MIT for this app. It bundles skills and ports prompts, skins and personalities from
-NousResearch/hermes-agent (MIT, see `app/src/main/assets/skills/LICENSE-hermes-agent.txt`). It uses
-Termux's `terminal-view` and `terminal-emulator` libraries (Apache-2.0). PRoot (GPL-2.0) and Alpine
-Linux are downloaded at build time and shipped as separate executables and data.
+> اگر با خطای `HTTP 403 ... Free models are turned off for your account` مواجه شدید: این یک خطای سمتِ پروایدر است، نه اپ. کلیدی که وارد کرده‌اید متعلق به اکانتی است که مدل‌های رایگان در آن فعال نیستند یا اعتبارش تمام شده. به داشبورد همان پروایدر بروید.
