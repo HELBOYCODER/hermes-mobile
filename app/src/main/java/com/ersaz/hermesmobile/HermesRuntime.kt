@@ -37,7 +37,9 @@ import java.util.concurrent.TimeUnit
 
 /** Process-wide Hermes runtime: the Android counterpart of a running `hermes` + gateway. */
 class HermesRuntime(val app: Application) {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
+        android.util.Log.e("Hermes", "Background task failed", error)
+    })
     val settings = Settings(app)
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -79,8 +81,16 @@ class HermesRuntime(val app: Application) {
     val modelStore = com.ersaz.hermesmobile.core.ModelStore(settings)
     val router by lazy { com.ersaz.hermesmobile.router.NineRouter(this) }
 
+    private var optionalStarted = false
+
     init {
         createChannels()
+    }
+
+    @Synchronized
+    fun startOptionalServices() {
+        if (optionalStarted) return
+        optionalStarted = true
         scope.launch(Dispatchers.IO) {
             runCatching { SkillStore.installBundled(app, skills.dir) }
             val soul = File(hermesHome, "SOUL.md")
@@ -89,8 +99,13 @@ class HermesRuntime(val app: Application) {
             runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
             runCatching { com.ersaz.hermesmobile.coding.CodingPack.install(this@HermesRuntime) }
                 .onFailure { log.e("coding", "Coding tools setup failed: ${it.message}") }
-            bridge.start()
-            router.autoStartIfNeeded()
+            runCatching { bridge.start() }.onFailure { log.e("bridge", "Startup failed: ${it.message}") }
+            runCatching { router.autoStartIfNeeded() }.onFailure { log.e("router", "Startup failed: ${it.message}") }
+            mcp.connectAllAsync()
+            if (settings.botMode || cron.all().any { it.enabled }) {
+                runCatching { com.ersaz.hermesmobile.service.HermesService.start(app) }
+                    .onFailure { log.e("service", "Startup failed: ${it.message}") }
+            }
         }
     }
 

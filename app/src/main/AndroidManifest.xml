@@ -67,6 +67,8 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".RecoveryActivity" android:exported="false" />
+
         <service
             android:name=".service.HermesService"
             android:exported="false"

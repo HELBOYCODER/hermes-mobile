@@ -26,6 +26,11 @@ class HermesService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val recovery = getSharedPreferences("recovery", MODE_PRIVATE)
+        if (recovery.getBoolean("safe", false) || recovery.getBoolean("crashed", false)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val rt = HermesRuntime.get(this)
         if (intent?.action == ACTION_STOP) {
             rt.gateway.stop(); rt.cronRunner.stop()
@@ -35,13 +40,24 @@ class HermesService : Service() {
             return START_NOT_STICKY
         }
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-        ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(rt), type)
+        try {
+            ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(rt), type)
+        } catch (error: Exception) {
+            rt.log.e("service", "Foreground startup failed: ${error.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (rt.settings.botMode) rt.gateway.start()
         rt.cronRunner.start()
-        rt.bridge.start()
+        runCatching { rt.bridge.start() }.onFailure { rt.log.e("bridge", "Service bridge failed: ${it.message}") }
         if (rt.settings.keepAwake && wakeLock == null) {
-            wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hermes:gateway").apply { setReferenceCounted(false); acquire() }
+            runCatching {
+                val lock = (getSystemService(POWER_SERVICE) as PowerManager)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hermes:gateway")
+                lock.setReferenceCounted(false)
+                lock.acquire()
+                wakeLock = lock
+            }.onFailure { rt.log.e("service", "CPU wake lock unavailable: ${it.message}") }
         }
         return START_STICKY
     }
@@ -80,6 +96,8 @@ class HermesService : Service() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val recovery = context.getSharedPreferences("recovery", Context.MODE_PRIVATE)
+        if (recovery.getBoolean("safe", false) || recovery.getBoolean("crashed", false)) return
         val rt = HermesRuntime.get(context)
         if (rt.settings.botMode || rt.cron.all().any { it.enabled }) HermesService.start(context)
     }

@@ -123,6 +123,23 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val recovery = getSharedPreferences("recovery", MODE_PRIVATE)
+        if (Build.VERSION.SDK_INT >= 30) {
+            runCatching {
+                val manager = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+                val last = manager.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull()
+                if (last != null && last.timestamp > recovery.getLong("reviewed", 0L) &&
+                    last.reason in listOf(android.app.ApplicationExitInfo.REASON_CRASH,
+                        android.app.ApplicationExitInfo.REASON_CRASH_NATIVE, android.app.ApplicationExitInfo.REASON_ANR)) {
+                    recovery.edit().putBoolean("crashed", true).apply()
+                }
+            }
+        }
+        if (recovery.getBoolean("crashed", false)) {
+            startActivity(android.content.Intent(this, RecoveryActivity::class.java))
+            finish()
+            return
+        }
         enableEdgeToEdge()
         val rt = HermesRuntime.get(this)
         rt.permissions.launcher = permLauncher
@@ -132,6 +149,9 @@ class MainActivity : ComponentActivity() {
             (window.decorView as android.view.ViewGroup).addView(it, android.view.ViewGroup.LayoutParams(1, 1))
         })
         if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (!recovery.getBoolean("safe", false)) {
+            rt.startOptionalServices()
+        }
         handleShare(intent)
 
         setContent {
@@ -142,7 +162,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale * fs),
             ) { HermesTheme(skin) {
-                var dest by rememberSaveable { mutableStateOf(Dest.Chat) }
+                var dest by androidx.compose.runtime.remember { mutableStateOf(Dest.Chat) }
                 BackHandler(dest != Dest.Chat) { dest = Dest.Chat }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -181,10 +201,9 @@ class MainActivity : ComponentActivity() {
                                 )
                                 Spacer(Modifier.height(10.dp))
                                 val groups = linkedMapOf(
-                                    "Conversations" to listOf(Dest.Chat, Dest.Sessions, Dest.Bots, Dest.Memory),
-                                    "Development" to listOf(Dest.Coding, Dest.Terminal, Dest.Files, Dest.Browser, Dest.Skills, Dest.Mcp, Dest.SubAgents),
-                                    "Automation & connections" to listOf(Dest.Cron, Dest.Gateway, Dest.WebUi),
-                                    "App" to listOf(Dest.Settings, Dest.Usage, Dest.Logs),
+                                    "Conversations" to listOf(Dest.Chat, Dest.Sessions, Dest.Bots),
+                                    "Development" to listOf(Dest.Coding),
+                                    "App" to listOf(Dest.Settings),
                                 )
                                 groups.forEach { (label, destinations) ->
                                     Text(label, color = skin.dim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
@@ -239,7 +258,10 @@ class MainActivity : ComponentActivity() {
                                 Dest.Usage -> UsageScreen(rt)
                                 Dest.Logs -> LogsScreen(rt)
                                 Dest.Coding -> com.ersaz.hermesmobile.ui.CodingScreen(rt, vm, onChat = { dest = Dest.Chat }, onNavigate = { route -> Dest.entries.firstOrNull { it.name == route }?.let { dest = it } })
-                                Dest.Settings -> SettingsScreen(rt) { route -> Dest.entries.firstOrNull { it.name == route }?.let { dest = it } }
+                                Dest.Settings -> SettingsScreen(rt) { route ->
+                                    if (route == "Recovery") startActivity(android.content.Intent(this@MainActivity, RecoveryActivity::class.java))
+                                    else Dest.entries.firstOrNull { it.name == route }?.let { dest = it }
+                                }
                             }
                         }
                     }
