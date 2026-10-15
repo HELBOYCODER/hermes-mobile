@@ -70,6 +70,10 @@ fun NousLoginCard(rt: HermesRuntime) {
                 Text("Model: ${st.route.model}", color = skin.dim, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 AccountActions(rt, ctx) { pickModel = true }
             }
+            is LoginState.AuthorizedWithoutModel -> {
+                Text(st.message, color = skin.warn, modifier = Modifier.padding(top = 6.dp))
+                AccountActions(rt, ctx) { pickModel = true }
+            }
             is LoginState.Failed -> {
                 Text("⚠️ ${st.message}", color = skin.error, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 Row {
