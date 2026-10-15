@@ -1,10 +1,10 @@
 # Hermes Mobile | هرمس موبایل
 
-**Android · ARM64 · 2.4.0**
+**Android · ARM64 · 2.4.1**
 
-[**دانلود فایل نصبی / Download APK — 2.4.0**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.4.0/hermes-mobile-2.4.0-arm64.apk)
+[**دانلود فایل نصبی / Download APK — 2.4.1**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.4.1/hermes-mobile-2.4.1-arm64.apk)
 
-[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.4.0)
+[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.4.1)
 
 ## فارسی
 
@@ -21,8 +21,12 @@
 
 ### تغییرات این نسخه
 
+- بازیابی مستقل پس از کرش با **Open safely**؛ چت‌ها و تنظیمات پاک نمی‌شوند. ورود امن اجرای خودکار MCP، روتر و سرویس پس‌زمینه را متوقف می‌کند. برای اجرای عادی از Settings → Startup recovery استفاده کنید.
+- آمار خراب باعث بسته‌شدن صفحهٔ مصرف نمی‌شود؛ خطاهای راه‌اندازی پس‌زمینه و نگه‌داشتن CPU ثبت و مهار می‌شوند.
+- منوی اصلی فقط گفت‌وگو، نشست‌ها، Bot Mode، Coding و Settings را نمایش می‌دهد؛ دیگر ابزارها داخل تنظیمات هستند.
+- علت دقیق کرش گوشی گزارش‌دهنده هنوز با لاگ همان گوشی تأیید نشده است. تست‌های رابط و بازیابی با Robolectric اجرا می‌شوند؛ تست دستگاه واقعی تأیید نشده است.
+
 - صفحهٔ اصلی تنظیمات با جست‌وجو، دسته‌بندی و آیکون؛ هر بخش صفحهٔ جدا دارد.
-- منوی اصلی در گروه‌های گفت‌وگو، توسعه، اتوماسیون و برنامه سازمان‌دهی شده است.
 - دکمه‌های پیام فقط **Copy** و **Retry** هستند.
 - فضای Coding workspace برای انتخاب مسیر پروژه و آماده‌سازی درخواست بررسی ریپو، پیاده‌سازی، بازبینی و رفع تست ناموفق.
 - MCP محلی **Hermes Code** با ابزارهای نمای پروژه، جست‌وجوی متن و بررسی تغییرات Git؛ بدون کلید خارجی، در `/root/projects` و فقط برای خواندن.
@@ -67,6 +71,11 @@ If Android rejects an update because of a signing-key mismatch, back up importan
 
 ### Changes in this version
 
+- Independent crash recovery with **Open safely**, preserving chats and settings. Safe startup skips automatic MCP, router and background service startup. Use Settings → Startup recovery to resume normal startup.
+- Malformed usage data no longer crashes statistics. Background and CPU wake-lock failures are logged and handled.
+- The drawer contains Chat, Sessions, Bot Mode, Coding and Settings; secondary tools are available inside Settings.
+- The reported phone's exact crash cause remains unverified. UI and recovery checks use Robolectric; physical-device testing is unverified.
+
 - Searchable settings hub with grouped icon rows and separate detail pages.
 - Main navigation grouped into Conversations, Development, Automation & connections, and App.
 - English-only **Copy** and **Retry** actions.
@@ -94,7 +103,7 @@ No Termux installation or root access is required. Online models, account login,
 
 ### OpenCode Free status
 
-Version 2.4.0 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
+Version 2.4.1 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
 
 ### In-app screenshots
 
@@ -102,5 +111,5 @@ Real screenshots of this version have not yet been added.
 
 ## Download integrity / صحت فایل
 
-File: `hermes-mobile-2.4.0-arm64.apk`
+File: `hermes-mobile-2.4.1-arm64.apk`
 The APK is built and published by GitHub Actions. See the release asset for its SHA-256 digest.
