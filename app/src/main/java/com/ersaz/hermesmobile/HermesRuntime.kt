@@ -99,6 +99,7 @@ class HermesRuntime(val app: Application) {
     fun startOptionalServices() {
         if (optionalStarted) return
         optionalStarted = true
+        nousLogin.resumePending()
         scope.launch(Dispatchers.IO) {
             runCatching { SkillStore.installBundled(app, skills.dir) }
             val soul = File(hermesHome, "SOUL.md")

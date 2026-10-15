@@ -49,6 +49,7 @@ fun CodingScreen(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNav
         SettingsHubRow("Fix a failing test", "Reproduce the failure before changing code", Icons.Default.BugReport) { prepare("Use systematic-debugging and verify-changes. Identify and reproduce a failing check, fix its cause, and rerun the relevant checks. Ask for the failure details if none are available.") }
         CodingPanels(rt, vm, onChat)
         MediaModelPanel(rt)
+        IntegrationPacksPanel(rt, onNavigate)
         SectionTitle("Local coding tools")
         Text(when (status) {
             is McpStatus.Connected -> "Connected · ${status.tools} read-only tools"

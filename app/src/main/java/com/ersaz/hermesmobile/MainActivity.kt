@@ -164,6 +164,8 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale * fs),
             ) { HermesTheme(skin) {
                 var dest by androidx.compose.runtime.remember { mutableStateOf(Dest.Chat) }
+                var chatFiles by androidx.compose.runtime.remember { mutableStateOf(false) }
+                if (chatFiles) com.ersaz.hermesmobile.ui.ChatFilesDialog(rt, vm) { chatFiles = false }
                 BackHandler(dest != Dest.Chat) { dest = Dest.Chat }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -242,7 +244,7 @@ class MainActivity : ComponentActivity() {
                                                 com.ersaz.hermesmobile.ui.SessionAction.ClearChat -> clear = true
                                                 com.ersaz.hermesmobile.ui.SessionAction.Terminal -> dest = Dest.Terminal
                                                 com.ersaz.hermesmobile.ui.SessionAction.Browser -> dest = Dest.Browser
-                                                com.ersaz.hermesmobile.ui.SessionAction.Files -> dest = Dest.Files
+                                                com.ersaz.hermesmobile.ui.SessionAction.Files -> chatFiles = true
                                                 com.ersaz.hermesmobile.ui.SessionAction.Skills -> dest = Dest.Skills
                                                 com.ersaz.hermesmobile.ui.SessionAction.Mcp -> dest = Dest.Mcp
                                                 com.ersaz.hermesmobile.ui.SessionAction.Memory -> dest = Dest.Memory

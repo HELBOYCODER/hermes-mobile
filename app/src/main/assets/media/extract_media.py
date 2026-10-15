@@ -136,7 +136,10 @@ def main():
     try:
         r = extract(a.url, a.output)
         if a.audio and not r['segments']:
-            r['audio_path'] = download_audio(a.url, a.output)
+            try:
+                r['audio_path'] = download_audio(a.url, a.output)
+            except MediaError as e:
+                r['limitation'] += ' ' + str(e)
         print(json.dumps(r, ensure_ascii=False))
     except Exception as e:
         print(json.dumps({'error': str(e) if isinstance(e, MediaError) else 'Media dependencies unavailable', 'coverage': 'none'}))

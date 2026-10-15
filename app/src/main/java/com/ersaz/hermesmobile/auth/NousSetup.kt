@@ -109,16 +109,22 @@ class NousLogin(private val rt: HermesRuntime) {
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
     val state: StateFlow<LoginState> = _state
     private var job: Job? = null
+    private val pending = PendingNousLogin(rt.app)
+
+    fun resumePending() {
+        if (pending.read() != null) start { /* The approved browser session already exists. */ }
+    }
 
     fun start(openBrowser: (String) -> Unit) {
         if (job?.isActive == true) return
         job = rt.scope.launch {
             try {
                 val result = NousConnectionFlow(authorize = {
-                    val dc = rt.nousAuth.requestDeviceCode()
+                    val dc = pending.read() ?: rt.nousAuth.requestDeviceCode().also { pending.save(it) }
                     _state.value = LoginState.AwaitingBrowser(dc)
                     openBrowser(dc.verificationUriComplete)
                     rt.nousAuth.awaitApproval(dc)
+                    pending.clear()
                     _state.value = LoginState.Configuring
                     rt.notify("Nous account connected", "Return to Hermes to choose a model.")
                     rt.bringToFront()
@@ -131,6 +137,7 @@ class NousLogin(private val rt: HermesRuntime) {
                 _state.value = LoginState.Idle
                 throw e
             } catch (e: Exception) {
+                pending.clear()
                 _state.value = LoginState.Failed(e.message ?: e.toString())
             }
         }
@@ -147,7 +154,7 @@ class NousLogin(private val rt: HermesRuntime) {
         }
     }
 
-    fun cancel() { job?.cancel(); _state.value = LoginState.Idle }
+    fun cancel() { pending.clear(); job?.cancel(); _state.value = LoginState.Idle }
 
     fun reset() { if (job?.isActive != true) _state.value = LoginState.Idle }
 

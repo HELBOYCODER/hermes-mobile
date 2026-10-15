@@ -1,0 +1,11 @@
+[
+ {"id":"spec-kit","name":"Specification workflow","source":"https://github.com/github/spec-kit","revision":"3238fa9285694dc539aeb9829b337bfd6aed7317","license":"MIT","runtime":"Bundled templates and Hermes workflow adapter","state":"bundled"},
+ {"id":"superpowers","name":"Coding, debugging and verification","source":"https://github.com/obra/superpowers","revision":"bb92a77741419a4ab5f06e711a283343f1ada0c3","license":"MIT","runtime":"Bundled instructions; existing tool approvals apply","state":"bundled"},
+ {"id":"whisper","name":"Offline multilingual transcription","source":"https://github.com/ggml-org/whisper.cpp","revision":"0c7be696371069e0baa2515ed7aa08d5a5473aa6","license":"MIT","runtime":"ARM64 native engine; optional 77.7 MB verified model download","state":"optional_model"},
+ {"id":"context7-docs","name":"Context7 documentation","source":"https://github.com/upstash/context7","license":"MIT (server); service terms apply","runtime":"Internet and Context7 API key in Environment; enable existing MCP preset","state":"remote"},
+ {"id":"github-readonly","name":"GitHub MCP","source":"https://github.com/github/github-mcp-server","license":"MIT (server); service terms apply","runtime":"GitHub token; enable existing read-only MCP preset","state":"remote"},
+ {"id":"serena","name":"Serena code intelligence","source":"https://github.com/oraios/serena","license":"MIT; language-server licenses vary","runtime":"Requires your remote host, language runtimes and MCP endpoint. Add it in MCP servers.","state":"requires_host"},
+ {"id":"playwright","name":"Playwright browser testing","source":"https://github.com/microsoft/playwright-mcp","license":"Apache-2.0","runtime":"Requires your remote browser host and MCP endpoint. Local Chromium is not bundled.","state":"requires_host"},
+ {"id":"maestro","name":"Maestro Android UI testing","source":"https://github.com/mobile-dev-inc/maestro","license":"Apache-2.0","runtime":"Developer host or CI with an Android device/emulator. Not installed on the phone.","state":"developer_host"},
+ {"id":"gitleaks","name":"Gitleaks secret scanning","source":"https://github.com/gitleaks/gitleaks","license":"MIT","runtime":"Developer host or CI. Use redacted reports; never attach raw secret values.","state":"developer_host"}
+]
