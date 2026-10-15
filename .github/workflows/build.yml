@@ -23,7 +23,7 @@ jobs:
         run: |
           export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin"
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Test bundled coding MCP
@@ -80,7 +80,9 @@ jobs:
           BADGING=$($ANDROID_HOME/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/release/app-release.apk)
           grep -F "versionName='$APP_VERSION'" <<< "$BADGING"
           grep -F "versionCode='$APP_VERSION_CODE'" <<< "$BADGING"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
           cp app/build/outputs/apk/release/app-release.apk "hermes-mobile-$APP_VERSION-arm64.apk"
+          sha256sum "hermes-mobile-$APP_VERSION-arm64.apk" > "hermes-mobile-$APP_VERSION-arm64.apk.sha256"
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
@@ -103,9 +105,11 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}
           target_commitish: ${{ github.sha }}
           name: Hermes Mobile ${{ env.APP_VERSION }}
-          files: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
+          files: |
+            hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
+            hermes-mobile-${{ env.APP_VERSION }}-arm64.apk.sha256
           body: |
-            فارسی: بازیابی مستقل پس از کرش بدون حذف چت‌ها و تنظیمات؛ ورود امن با توقف اجرای خودکار افزونه‌ها، روتر و سرویس پس‌زمینه. منوی اصلی خلوت‌تر و ابزارها در تنظیمات دسته‌بندی شدند. رفع کرش آمار مصرف هنگام وجود داده خراب.
-            English: Independent crash recovery preserves chats and settings. Safe startup skips automatic integrations, router and background service. Simplified drawer; tools remain available in Settings. Malformed usage rows no longer crash statistics.
-            Install over the previous version to preserve data. ARM64 only.
-            Includes automated Android screen/recovery tests. The reported phone's exact crash stack and physical-device behavior are not verified.
+            فارسی: ورود حساب و بازگشت مرورگر بهبود یافت؛ Test کنار مدل‌ها، فایل‌های هر چت، تاریخ‌بندی گفتگوها، گردش کار Spec Kit، وظایف و شواهد تست ماندگار، checkpoint و کپشن لینک‌های عمومی اضافه شدند. Whisper چندزبانه با دانلود اختیاری و بررسی هش مدل در Coding قرار دارد.
+            English: Improved account/browser return, inline model probes, per-chat files, grouped sessions, Spec Kit workflows, persistent tasks/test evidence, file checkpoints, public-link captions and optional native multilingual Whisper transcription.
+            Install over the previous version to preserve data. Android ARM64 only.
+            OpenCode Free upstream access restrictions remain; listing a model does not prove inference access. No physical-device login/native performance certification is claimed. Remote integrations require user configuration and their own host.

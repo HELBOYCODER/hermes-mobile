@@ -19,3 +19,7 @@ app/src/main/assets/sandbox/
 # Python tools and MCP tests
 __pycache__/
 *.pyc
+
+# Isolated development workspaces
+.worktrees/
+.superpowers/

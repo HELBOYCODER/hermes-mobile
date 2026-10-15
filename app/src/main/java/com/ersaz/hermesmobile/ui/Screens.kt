@@ -144,8 +144,28 @@ fun SessionsScreen(rt: HermesRuntime, vm: ChatViewModel, open: () -> Unit) {
         Row(Modifier.padding(vertical = 8.dp)) {
             Button(onClick = { vm.newSession(); open() }) { Text("＋ New session") }
         }
+        val dates = remember(refresh) { rt.sessions.list().associate { it.id to it.updatedAt } }
+        val groups = list.groupBy { entry ->
+            if (query.isNotBlank()) "Search results" else {
+                val today = java.util.Calendar.getInstance().apply {
+                    set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+                }
+                val yesterday = (today.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }.timeInMillis
+                val week = (today.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, -7) }.timeInMillis
+                val time = dates[entry.first] ?: 0
+                when {
+                    time >= today.timeInMillis -> "Today"
+                    time >= yesterday -> "Yesterday"
+                    time >= week -> "This week"
+                    else -> "Earlier"
+                }
+            }
+        }
         LazyColumn {
-            items(list, key = { it.first }) { (id, info) ->
+          groups.forEach { (group, entries) ->
+            item(key = "group-$group") { Text(group, color = skin.dim, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 12.dp)) }
+            items(entries, key = { it.first }) { (id, info) ->
                 Row(Modifier.fillMaxWidth().clickable { vm.openSession(id); open() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(info.first, color = if (id == vm.agent.session.id) skin.accent else skin.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -155,6 +175,7 @@ fun SessionsScreen(rt: HermesRuntime, vm: ChatViewModel, open: () -> Unit) {
                 }
                 HorizontalDivider(color = skin.selection)
             }
+          }
         }
     }
 }

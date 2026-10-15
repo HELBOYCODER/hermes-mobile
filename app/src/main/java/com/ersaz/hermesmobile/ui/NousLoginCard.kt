@@ -70,6 +70,10 @@ fun NousLoginCard(rt: HermesRuntime) {
                 Text("Model: ${st.route.model}", color = skin.dim, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 AccountActions(rt, ctx) { pickModel = true }
             }
+            is LoginState.AuthorizedWithoutModel -> {
+                Text(st.message, color = skin.warn, modifier = Modifier.padding(top = 6.dp))
+                AccountActions(rt, ctx) { pickModel = true }
+            }
             is LoginState.Failed -> {
                 Text("⚠️ ${st.message}", color = skin.error, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 Row {
@@ -106,7 +110,7 @@ private fun AccountActions(rt: HermesRuntime, ctx: Context, browse: () -> Unit) 
 private fun startLogin(rt: HermesRuntime, ctx: Context) = rt.nousLogin.start { url -> openUrl(ctx, url) }
 
 private fun openUrl(ctx: Context, url: String) {
-    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.open(ctx, url)
 }
 
 private fun copy(ctx: Context, text: String) {

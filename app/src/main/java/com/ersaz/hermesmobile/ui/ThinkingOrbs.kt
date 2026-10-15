@@ -70,58 +70,18 @@ private const val ORBS = 5
 @Composable
 fun ThinkingOrbs(mode: OrbMode, size: Dp = 56.dp, modifier: Modifier = Modifier) {
     val skin = LocalSkin.current
-    val spec = tween<Float>(650, easing = FastOutSlowInEasing)
-    val speed by animateFloatAsState(mode.speed, spec, label = "speed")
-    val spread by animateFloatAsState(mode.spread, spec, label = "spread")
-    val wave by animateFloatAsState(mode.wave, spec, label = "wave")
-    val pulse by animateFloatAsState(mode.pulse, spec, label = "pulse")
-    val glow by animateFloatAsState(mode.glow, spec, label = "glow")
-    val tint by animateFloatAsState(when (mode) { OrbMode.Waiting -> 1f; OrbMode.Error -> 2f; else -> 0f }, spec, label = "tint")
-
-    // Integrate speed over time so changing speed never makes the orbs jump.
-    var phase by remember { mutableFloatStateOf(0f) }
-    var last by remember { mutableLongStateOf(0L) }
-    val speedNow by androidx.compose.runtime.rememberUpdatedState(speed)
-    LaunchedEffect(Unit) {
-        while (true) {
-            androidx.compose.runtime.withFrameNanos { now ->
-                if (last != 0L) phase += ((now - last) / 1_000_000_000f) * speedNow
-                last = now
-            }
-        }
+    val color = when (mode) {
+        OrbMode.Error -> skin.error
+        OrbMode.Waiting -> skin.warn
+        else -> skin.accent
     }
-
-    val palette = listOf(skin.accent, skin.title, skin.label, skin.ok, skin.border)
-    val warn = skin.warn; val err = skin.error
-    Canvas(modifier.size(size).graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
-        val w = this.size.minDimension
-        val c = Offset(this.size.width / 2, this.size.height / 2)
-        for (i in 0 until ORBS) {
-            val f = i / ORBS.toFloat()
-            val a = phase * 2f * PI.toFloat()
-            // Free orbit: each orb has its own frequency pair, so the cluster never repeats exactly.
-            val ox = sin(a * (0.55f + 0.17f * i) + f * 6.28f) * spread * w
-            val oy = cos(a * (0.43f + 0.21f * i) + f * 4.1f) * spread * w * 0.85f
-            // Wave: orbs line up horizontally and bob in sequence.
-            val wx = (f - 0.4f) * 1.0f * w * 0.9f
-            val wy = sin(a * 1.4f - f * 5f) * w * 0.14f
-            val px = c.x + ox * (1 - wave) + wx * wave
-            val py = c.y + oy * (1 - wave) + wy * wave
-            val r = w * (0.17f + 0.04f * (i % 3)) * (1f + pulse * sin(a * 1.1f + i * 1.7f))
-            val base = palette[i % palette.size]
-            val col = when {
-                tint > 1f -> lerp(warn, err, tint - 1f)
-                tint > 0f -> lerp(base, warn, tint)
-                else -> base
-            }
-            drawCircle(
-                Brush.radialGradient(
-                    0f to col.copy(alpha = 0.95f * glow), 0.45f to col.copy(alpha = 0.40f * glow), 1f to Color.Transparent,
-                    center = Offset(px, py), radius = r * 2.4f,
-                ),
-                radius = r * 2.4f, center = Offset(px, py), blendMode = BlendMode.Plus,
-            )
-            drawCircle(Color.White.copy(alpha = 0.55f * glow), r * 0.28f, Offset(px - r * 0.15f, py - r * 0.18f), blendMode = BlendMode.Plus)
+    androidx.compose.foundation.layout.Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        if (mode == OrbMode.Idle || mode == OrbMode.Waiting || mode == OrbMode.Error) {
+            Canvas(Modifier.size(10.dp)) { drawCircle(color) }
+        } else {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size((size.value * 0.45f).coerceIn(12f, 22f).dp),
+                color = color, strokeWidth = 2.dp)
         }
     }
 }

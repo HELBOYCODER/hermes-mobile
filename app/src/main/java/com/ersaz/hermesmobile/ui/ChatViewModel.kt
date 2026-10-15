@@ -283,6 +283,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         ui { rebuild(); status = "" }
     }
 
+    fun clearChat() {
+        if (busy) return
+        agent.session.messages.clear()
+        agent.session.todos.clear()
+        agent.session.title = ""
+        runtime.sessions.save(agent.session)
+        rebuild()
+    }
+
     fun openSession(id: String) { runtime.sessions.load(id)?.let { resumeSession(it) } }
 
     override fun stop() {

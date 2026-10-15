@@ -40,6 +40,9 @@ object CodingPack {
             temp.writeBytes(bytes)
             check(temp.renameTo(script)) { "Could not install bundled coding MCP" }
         }
+        val media = File(rt.hermesHome, "media/extract_media.py")
+        media.parentFile?.mkdirs()
+        rt.app.assets.open("media/extract_media.py").use { input -> media.outputStream().use { input.copyTo(it) } }
         CodingDefaults.seed(rt.mcp.store, File(rt.hermesHome, "mcp/.coding-defaults-v1"))
         if (rt.mcp.store.get(CodingDefaults.SERVER_ID)?.enabled == true) rt.mcp.reconnectAsync(CodingDefaults.SERVER_ID, interactive = false)
     }

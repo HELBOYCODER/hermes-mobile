@@ -99,6 +99,7 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                                 Text(if (p.free) "FREE" else p.priceLabel.ifBlank { "Pricing not listed" },
                                     color = if (p.free) skin.ok else skin.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
+                            ModelProbeAction(rt, p)
                             if (active) Icon(Icons.Default.Check, "selected", tint = skin.accent, modifier = Modifier.size(20.dp))
                             IconButton(onClick = { store.remove(p.id); rev++ }, modifier = Modifier.size(32.dp)) {
                                 Icon(Icons.Default.Close, "remove from list", tint = skin.dim, modifier = Modifier.size(16.dp))
@@ -200,6 +201,13 @@ fun ModelPickerDialog(rt: HermesRuntime, current: String, onPick: (ModelInfo) ->
                                 Text(m.name, color = if (m.id == current) skin.accent else skin.text, fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                 if (m.free) Text("  FREE", color = skin.ok, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                ModelProbeAction(rt, com.ersaz.hermesmobile.core.ModelProfile(
+                                    m.name, rt.settings.provider,
+                                    if (rt.settings.provider == "nous") {
+                                        if (m.id == com.ersaz.hermesmobile.auth.NousSetup.WELCOME_MODEL) com.ersaz.hermesmobile.auth.NousPortal.WELCOME
+                                        else com.ersaz.hermesmobile.auth.NousPortal.INFERENCE
+                                    } else rt.settings.baseUrl,
+                                    rt.settings.apiKey, m.id, m.free, "fetched", m.priceLabel()))
                             }
                             val extras = listOfNotNull(
                                 m.id.takeIf { it != m.name },

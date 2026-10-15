@@ -100,6 +100,7 @@ sealed class LoginState {
     data class AwaitingBrowser(val code: DeviceCode) : LoginState()
     data object Configuring : LoginState()
     data class Connected(val route: NousRoute) : LoginState()
+    data class AuthorizedWithoutModel(val message: String) : LoginState()
     data class Failed(val message: String) : LoginState()
 }
 
@@ -108,25 +109,35 @@ class NousLogin(private val rt: HermesRuntime) {
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
     val state: StateFlow<LoginState> = _state
     private var job: Job? = null
+    private val pending = PendingNousLogin(rt.app)
+
+    fun resumePending() {
+        if (pending.read() != null) start { /* The approved browser session already exists. */ }
+    }
 
     fun start(openBrowser: (String) -> Unit) {
         if (job?.isActive == true) return
         job = rt.scope.launch {
             try {
-                val dc = rt.nousAuth.requestDeviceCode()
-                _state.value = LoginState.AwaitingBrowser(dc)
-                openBrowser(dc.verificationUriComplete)
-                rt.nousAuth.awaitApproval(dc)
-                _state.value = LoginState.Configuring
-                val route = NousSetup(rt).configure()
-                _state.value = LoginState.Connected(route)
-                // "Back-link": nudge the user back to the app once the browser step is done.
-                rt.notify("Connected to Nous Portal", route.message)
-                rt.bringToFront()
+                val result = NousConnectionFlow(authorize = {
+                    val dc = pending.read() ?: rt.nousAuth.requestDeviceCode().also { pending.save(it) }
+                    _state.value = LoginState.AwaitingBrowser(dc)
+                    openBrowser(dc.verificationUriComplete)
+                    rt.nousAuth.awaitApproval(dc)
+                    pending.clear()
+                    _state.value = LoginState.Configuring
+                    rt.notify("Nous account connected", "Return to Hermes to choose a model.")
+                    rt.bringToFront()
+                }, configure = { NousSetup(rt).configure() }).run()
+                _state.value = when (result) {
+                    is NousConnectionResult.Ready -> LoginState.Connected(result.route)
+                    is NousConnectionResult.AuthorizedWithoutModel -> LoginState.AuthorizedWithoutModel(result.message)
+                }
             } catch (e: CancellationException) {
                 _state.value = LoginState.Idle
                 throw e
             } catch (e: Exception) {
+                pending.clear()
                 _state.value = LoginState.Failed(e.message ?: e.toString())
             }
         }
@@ -139,11 +150,11 @@ class NousLogin(private val rt: HermesRuntime) {
             _state.value = LoginState.Configuring
             _state.value = try { LoginState.Connected(NousSetup(rt).configure()) }
             catch (e: CancellationException) { LoginState.Idle }
-            catch (e: Exception) { LoginState.Failed(e.message ?: e.toString()) }
+            catch (e: Exception) { if (rt.nousAuth.signedIn) LoginState.AuthorizedWithoutModel("Account connected. Model access could not be checked.") else LoginState.Failed(e.message ?: "Sign-in failed") }
         }
     }
 
-    fun cancel() { job?.cancel(); _state.value = LoginState.Idle }
+    fun cancel() { pending.clear(); job?.cancel(); _state.value = LoginState.Idle }
 
     fun reset() { if (job?.isActive != true) _state.value = LoginState.Idle }
 

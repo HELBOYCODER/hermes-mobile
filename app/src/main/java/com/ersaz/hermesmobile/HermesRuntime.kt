@@ -79,6 +79,14 @@ class HermesRuntime(val app: Application) {
     val cronRunner = CronRunner(this)
     val bridge = LocalBridge(this)
     val modelStore = com.ersaz.hermesmobile.core.ModelStore(settings)
+    val modelProbe by lazy {
+        com.ersaz.hermesmobile.llm.ModelProbe({ profile ->
+            com.ersaz.hermesmobile.llm.LlmClient(http,
+                if (profile.providerId == "nous") com.ersaz.hermesmobile.auth.NousPortal.authenticatedEndpoint(nousAuth.signedIn, profile.baseUrl) else profile.baseUrl,
+                if (profile.providerId == "nous") "" else profile.apiKey, profile.providerId,
+                if (profile.providerId == "nous") nousKeyProvider else null)
+        }, System::currentTimeMillis)
+    }
     val router by lazy { com.ersaz.hermesmobile.router.NineRouter(this) }
 
     private var optionalStarted = false
@@ -91,6 +99,7 @@ class HermesRuntime(val app: Application) {
     fun startOptionalServices() {
         if (optionalStarted) return
         optionalStarted = true
+        nousLogin.resumePending()
         scope.launch(Dispatchers.IO) {
             runCatching { SkillStore.installBundled(app, skills.dir) }
             val soul = File(hermesHome, "SOUL.md")

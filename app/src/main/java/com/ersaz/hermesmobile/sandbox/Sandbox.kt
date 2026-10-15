@@ -129,6 +129,21 @@ class Sandbox(private val context: Context, private val settings: Settings) {
         }
     }
 
+    /** Add media dependencies on upgrades without replacing the user's package database. */
+    suspend fun installBundledMedia(): Boolean = withContext(Dispatchers.IO) {
+        installLock.withLock {
+            val stamp = File(baseDir, ".media-build")
+            val version = com.ersaz.hermesmobile.BuildConfig.VERSION_CODE.toString()
+            if (stamp.exists() && stamp.readText() == version && File(rootfs, "usr/bin/ffmpeg").exists()) return@withLock true
+            try {
+                context.assets.open("sandbox/media-runtime.bin").use { TarExtractor.extract(it, rootfs) }
+                check(File(rootfs, "usr/bin/ffmpeg").exists())
+                stamp.writeText(version)
+                true
+            } catch (e: Exception) { false }
+        }
+    }
+
     suspend fun reinstall(): Boolean {
         marker.delete()
         return ensureInstalled()
@@ -259,8 +274,8 @@ class Sandbox(private val context: Context, private val settings: Settings) {
                 }
             } catch (_: Exception) {}
         }.apply { isDaemon = true; start() }
-        val finished = proc.waitFor(timeoutSec.toLong(), TimeUnit.SECONDS)
-        if (!finished) proc.destroyForcibly()
+        val finished = try { waitForCommand(proc, timeoutSec.toLong()) }
+        catch (e: kotlinx.coroutines.CancellationException) { script.delete(); throw e }
         reader.join(2000)
         script.delete()
         var out = synchronized(buf) { buf.toString() }
