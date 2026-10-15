@@ -2,6 +2,10 @@
 
 **Android · ARM64 · 2.5.0**
 
+🌐 [**وب‌سایت هرمس — معرفی، راهنمای نصب و دانلود / Hermes website**](https://hermes-mobile.genialgnome10.chatgpt.site)
+
+[پوستر فارسی / Persian poster](https://hermes-mobile.genialgnome10.chatgpt.site/assets/hermes-poster-fa.png) · [متن آمادهٔ معرفی / Share text](https://hermes-mobile.genialgnome10.chatgpt.site/assets/caption-fa.txt)
+
 [**دانلود فایل نصبی / Download APK — 2.5.0**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.5.0/hermes-mobile-2.5.0-arm64.apk)
 
 [جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.5.0)
@@ -64,7 +68,30 @@
 
 ### تصاویر داخل برنامه
 
-اسکرین‌شات واقعی از این نسخه هنوز به ریپو اضافه نشده است.
+تصاویر زیر از کامپوننت‌های واقعی نسخهٔ ۲.۵.۰ با رندر خودکار Robolectric Native Graphics تهیه شده‌اند. گفت‌وگوی چت نمونه و از پیش تنظیم‌شده است؛ تصویر گوشی فیزیکی یا اثبات پاسخ‌گویی مدل نیست. [اجرای موفق ثبت تصاویر](https://github.com/HELBOYCODER/hermes-mobile/actions/runs/38765216828).
+
+<p align="center">
+  <img src="https://hermes-mobile.genialgnome10.chatgpt.site/assets/app-chat-demo.png" width="280" alt="رابط واقعی چت هرمس با گفت‌وگوی نمونه">
+  <img src="https://hermes-mobile.genialgnome10.chatgpt.site/assets/app-settings-dark.png" width="280" alt="رابط واقعی تنظیمات هرمس">
+</p>
+
+### حمایت از توسعه
+
+پشت این پروژه، ساعت‌ها توسعه، دیباگ، آزمون و هزینهٔ ابزار و زیرساخت است. اگر هرمس برایتان مفید بود، حمایت مالی اختیاری شما به ادامهٔ توسعه و رفع اشکال‌ها کمک می‌کند. دانلود برنامه به پرداخت نیاز ندارد و دونیت، اشتراک یا اعتبار مدل‌ها ایجاد نمی‌کند.
+
+**USDT — فقط شبکهٔ BNB Smart Chain / BEP20**
+
+```text
+0x9193975EBa38d01A639dCa9202E224153D51949F
+```
+
+[QR و کپی آدرس حمایت](https://hermes-mobile.genialgnome10.chatgpt.site/#support) · [گزارش باگ و مشارکت](https://github.com/HELBOYCODER/hermes-mobile/issues)
+
+### پوستر معرفی
+
+پوستر زیر با هوش مصنوعی تولید شده است؛ نمای گوشی در پوستر مفهومی است و اسکرین‌شات واقعی برنامه نیست.
+
+<p align="center"><img src="https://hermes-mobile.genialgnome10.chatgpt.site/assets/hermes-poster-fa.webp" width="500" alt="پوستر فارسی هرمس موبایل"></p>
 
 ## English
 
@@ -131,3 +158,12 @@ Real screenshots of this version have not yet been added.
 
 File: `hermes-mobile-2.5.0-arm64.apk`
 The APK is built and published by GitHub Actions. See the release asset for its SHA-256 digest.
+
+
+### Support independent development
+
+Hermes Mobile takes development time, debugging, testing and infrastructure costs. If it helps your work, an optional donation supports continued development. Downloading does not require payment; donations do not purchase provider subscriptions or model credit.
+
+**USDT on BNB Smart Chain (BEP20) only:** `0x9193975EBa38d01A639dCa9202E224153D51949F`
+
+[Donation QR and copy button](https://hermes-mobile.genialgnome10.chatgpt.site/#support). The website includes Persian introduction, version requirements, installation instructions and direct APK download. App UI images are automated renders of actual2.5.0 components with staged demo text, not physical-device screenshots. The promotional poster is AI-generated conceptual artwork.
