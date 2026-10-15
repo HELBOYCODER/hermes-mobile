@@ -78,6 +78,7 @@ class LlmClient(
         reasoningEffort: String = "",
         sink: StreamSink? = null,
         temperature: Double? = null,
+        maxAttempts: Int = 3,
     ): LlmResponse {
         var attempt = 0
         var forceKey = false
@@ -89,7 +90,7 @@ class LlmClient(
                 // An expired OAuth bearer: refresh once and replay the request.
                 if (e.status == 401 && keyProvider != null && !forceKey) { forceKey = true; continue }
                 attempt++
-                if (!e.retryable || attempt >= 3) throw e
+                if (!e.retryable || attempt >= maxAttempts.coerceIn(1, 3)) throw e
                 delay(1500L * attempt * attempt)
             }
         }

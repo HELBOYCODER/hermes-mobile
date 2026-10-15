@@ -125,7 +125,7 @@ class McpOAuth(private val context: Context, private val http: OkHttpClient, val
      */
     suspend fun authorize(server: McpServer, meta: OAuthMeta, openUrl: (String) -> Unit) {
         val url = server.url ?: throw McpOAuthException("Not a remote server.")
-        val callback = LoopbackCallback()
+        val callback = LoopbackCallback(com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.returnLink(context, "mcp"))
         try {
             val redirect = callback.redirectUri
             val st = store.get(server.id)
@@ -156,7 +156,7 @@ class McpOAuth(private val context: Context, private val http: OkHttpClient, val
                 if (meta.scopes.isNotEmpty()) append("&scope=").append(enc(meta.scopes.joinToString(" ")))
             }
             openUrl(authUrl)
-            val params = try { withTimeout(5 * 60_000L) { callback.await() } }
+            val params = try { withTimeout(5 * 60_000L) { callback.await(state) } }
                 catch (e: kotlinx.coroutines.TimeoutCancellationException) { throw McpOAuthException("Sign-in timed out. Try again.") }
             if (params["error"] != null) throw McpOAuthException("Sign-in failed: ${params["error_description"] ?: params["error"]}")
             if (params["state"] != state) throw McpOAuthException("Sign-in response didn't match the request (state mismatch).")
@@ -257,7 +257,7 @@ class McpOAuth(private val context: Context, private val http: OkHttpClient, val
 }
 
 /** One-shot HTTP server on 127.0.0.1 that receives the browser redirect. */
-class LoopbackCallback {
+class LoopbackCallback(private val returnUri: String? = null) {
     private val server: ServerSocket = bind()
     val redirectUri: String get() = "http://127.0.0.1:${server.localPort}/callback"
 
@@ -266,19 +266,24 @@ class LoopbackCallback {
         return ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))
     }
 
-    suspend fun await(): Map<String, String> = withContext(Dispatchers.IO) {
+    suspend fun await(expectedState: String? = null): Map<String, String> = withContext(Dispatchers.IO) {
         while (true) {
             val sock = try { server.accept() } catch (e: IOException) { throw CancellationException("closed") }
             sock.use { s ->
                 val line = s.getInputStream().bufferedReader().readLine().orEmpty() // GET /callback?code=… HTTP/1.1
                 val target = line.split(' ').getOrNull(1).orEmpty()
-                if (!target.startsWith("/callback")) { respond(s, 404, "Not found"); return@use }
+                if (target.substringBefore('?') != "/callback") { respond(s, 404, "Not found"); return@use }
                 val q = target.substringAfter('?', "")
                 val params = q.split('&').filter { it.isNotEmpty() }.associate {
                     URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('=', ""), "UTF-8")
                 }
+                if (expectedState != null && params["state"] != expectedState) {
+                    respond(s, 400, "Sign-in response does not match this request.")
+                    return@use
+                }
                 val ok = params["error"] == null
-                respond(s, 200, "<html><body style='font-family:sans-serif;text-align:center;padding:48px'><h2>${if (ok) "Signed in ✅" else "Sign-in failed"}</h2><p>You can close this tab and return to Hermes.</p></body></html>")
+                val link = returnUri?.let { "<p><a href='$it'>Return to Hermes</a></p>" }.orEmpty()
+                respond(s, 200, "<html><body style='font-family:sans-serif;text-align:center;padding:48px'><h2>${if (ok) "Approval received" else "Sign-in declined"}</h2><p>Return to Hermes to finish connecting.</p>$link</body></html>")
                 return@withContext params
             }
         }
@@ -306,5 +311,5 @@ object AppForeground {
 }
 
 fun Context.openInBrowser(url: String) {
-    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.open(this, url)
 }

@@ -259,6 +259,7 @@ class Agent(
     }
 
     private suspend fun maybeCompress(listener: AgentListener) {
+        if (!session.autoCompact) return
         val ctx = runtime.settings.contextLength.coerceAtLeast(8000)
         val threshold = ctx * runtime.settings.compressionThreshold.coerceIn(20, 95) / 100
         val estimate = maxOf(estimateTokens(), session.lastPromptTokens)

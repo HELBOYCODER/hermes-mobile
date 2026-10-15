@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
             finish()
             return
         }
+        com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.onReturn(this, intent)
         enableEdgeToEdge()
         val rt = HermesRuntime.get(this)
         rt.permissions.launcher = permLauncher
@@ -233,7 +234,30 @@ class MainActivity : ComponentActivity() {
                                 },
                                 navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.label) } },
                                 actions = {
-                                    if (dest == Dest.Chat) IconButton(onClick = { vm.newSession() }) { Icon(Icons.Default.AddComment, "new chat", tint = skin.label) }
+                                    if (dest == Dest.Chat) {
+                                        var clear by androidx.compose.runtime.remember { mutableStateOf(false) }
+                                        com.ersaz.hermesmobile.ui.ChatSessionMenu { action ->
+                                            when (action) {
+                                                com.ersaz.hermesmobile.ui.SessionAction.NewChat -> vm.newSession()
+                                                com.ersaz.hermesmobile.ui.SessionAction.ClearChat -> clear = true
+                                                com.ersaz.hermesmobile.ui.SessionAction.Terminal -> dest = Dest.Terminal
+                                                com.ersaz.hermesmobile.ui.SessionAction.Browser -> dest = Dest.Browser
+                                                com.ersaz.hermesmobile.ui.SessionAction.Files -> dest = Dest.Files
+                                                com.ersaz.hermesmobile.ui.SessionAction.Skills -> dest = Dest.Skills
+                                                com.ersaz.hermesmobile.ui.SessionAction.Mcp -> dest = Dest.Mcp
+                                                com.ersaz.hermesmobile.ui.SessionAction.Memory -> dest = Dest.Memory
+                                                com.ersaz.hermesmobile.ui.SessionAction.Usage -> dest = Dest.Usage
+                                                com.ersaz.hermesmobile.ui.SessionAction.AutoCompact -> {
+                                                    vm.agent.session.autoCompact = !vm.agent.session.autoCompact
+                                                    rt.sessions.save(vm.agent.session)
+                                                }
+                                            }
+                                        }
+                                        if (clear) androidx.compose.material3.AlertDialog(onDismissRequest = { clear = false },
+                                            title = { Text("Clear this chat?") }, text = { Text("Messages in this session will be removed.") },
+                                            confirmButton = { androidx.compose.material3.TextButton(onClick = { clear = false; vm.clearChat() }) { Text("Clear Chat") } },
+                                            dismissButton = { androidx.compose.material3.TextButton(onClick = { clear = false }) { Text("Cancel") } })
+                                    }
                                     if (dest != Dest.Terminal) IconButton(onClick = { dest = Dest.Terminal }) { Icon(Icons.Default.Terminal, "terminal", tint = skin.label) }
                                 },
                                 colors = TopAppBarDefaults.topAppBarColors(containerColor = skin.bg, scrolledContainerColor = skin.bg),
@@ -272,6 +296,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.onReturn(this, intent)
         handleShare(intent)
     }
 

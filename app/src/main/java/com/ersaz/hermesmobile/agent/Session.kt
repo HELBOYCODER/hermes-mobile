@@ -105,6 +105,7 @@ class Session(
     var compressions: Int = 0,
     val todos: MutableList<TodoItem> = mutableListOf(),
     var modelOverride: String? = null,
+    var autoCompact: Boolean = true,
     var botId: String? = null, // which Bot Mode profile this belongs to (null = the plain app chat)
 ) {
     fun toJson(): JSONObject = JSONObject()
@@ -117,6 +118,7 @@ class Session(
         .put("todos", JSONArray().also { a ->
             todos.forEach { a.put(JSONObject().put("id", it.id).put("content", it.content).put("status", it.status)) }
         })
+        .put("auto_compact", autoCompact)
         .put("model_override", modelOverride)
         .put("bot_id", botId)
 
@@ -130,7 +132,7 @@ class Session(
         return retry
     }
 
-    fun displayTitle(): String = title.ifBlank {
+    fun displayTitle(): String = readableSessionTitle(title).ifBlank {
         messages.firstOrNull { it.role == "user" }?.content?.lineSequence()?.firstOrNull()?.take(60)
             ?: "New session"
     }
@@ -162,6 +164,7 @@ class Session(
                     TodoItem(it.optString("id"), it.optString("content"), it.optString("status", "pending"))
                 }?.toMutableList() ?: mutableListOf(),
                 modelOverride = o.optStringOrNull("model_override"),
+                autoCompact = o.optBoolean("auto_compact", true),
                 botId = o.optStringOrNull("bot_id"),
             )
         }
@@ -251,4 +254,10 @@ class SessionStore(private val dir: File) {
         }
         return hits.sortedByDescending { it.first }.take(limit).map { it.second }
     }
+}
+
+/** Tolerate generated JSON titles without rewriting user data. */
+fun readableSessionTitle(title: String): String {
+    if (!title.trimStart().startsWith("{")) return title
+    return runCatching { JSONObject(title).optString("title").ifBlank { title } }.getOrDefault(title)
 }

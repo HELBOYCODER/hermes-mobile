@@ -99,6 +99,7 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                                 Text(if (p.free) "FREE" else p.priceLabel.ifBlank { "Pricing not listed" },
                                     color = if (p.free) skin.ok else skin.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
+                            ModelProbeAction(rt, p)
                             if (active) Icon(Icons.Default.Check, "selected", tint = skin.accent, modifier = Modifier.size(20.dp))
                             IconButton(onClick = { store.remove(p.id); rev++ }, modifier = Modifier.size(32.dp)) {
                                 Icon(Icons.Default.Close, "remove from list", tint = skin.dim, modifier = Modifier.size(16.dp))
