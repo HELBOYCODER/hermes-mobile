@@ -20,15 +20,16 @@ class ModelProbe(private val clientFactory: (ModelProfile) -> LlmClient, private
         try {
             return slots.withPermit {
                 val start = nowMs()
-                val client = clientFactory(profile)
+                var client: LlmClient? = null
                 val status = try {
+                    val probeClient = clientFactory(profile).also { client = it }
                     withTimeout(30_000) {
-                        val result = client.chat(profile.model, listOf(Message("user", "Reply with OK.")),
+                        val result = probeClient.chat(profile.model, listOf(Message("user", "Reply with OK.")),
                             stream = false, maxTokens = 16, maxAttempts = 1)
                         if (result.content.isBlank()) ProbeStatus.UNAVAILABLE else ProbeStatus.RESPONDED
                     }
-                } catch (_: TimeoutCancellationException) { client.cancel(); ProbeStatus.TIMED_OUT
-                } catch (e: CancellationException) { client.cancel(); throw e
+                } catch (_: TimeoutCancellationException) { client?.cancel(); ProbeStatus.TIMED_OUT
+                } catch (e: CancellationException) { client?.cancel(); throw e
                 } catch (e: LlmException) {
                     when {
                         e.status == 401 -> ProbeStatus.AUTH_ERROR
