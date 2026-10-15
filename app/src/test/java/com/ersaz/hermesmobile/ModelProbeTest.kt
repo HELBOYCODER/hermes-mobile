@@ -31,4 +31,10 @@ class ModelProbeTest {
    assertFalse(result.detail.contains("secret-key"))
   } finally {server.shutdown()}
  }
+ @Test fun missingNousSessionIsClassifiedWithoutLeakingErrors()=runBlocking {
+  val p=ModelProfile("Nous","nous","https://inference-api.nousresearch.com/v1","","model")
+  val r=ModelProbe({throw com.ersaz.hermesmobile.auth.NousAuthException("sensitive")},System::currentTimeMillis).test(p)
+  assertEquals(ProbeStatus.AUTH_ERROR,r.status)
+  assertFalse(r.detail.contains("sensitive"))
+ }
 }
