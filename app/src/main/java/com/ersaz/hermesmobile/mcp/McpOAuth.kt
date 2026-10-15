@@ -268,9 +268,20 @@ class LoopbackCallback(private val returnUri: String? = null) {
 
     suspend fun await(expectedState: String? = null): Map<String, String> = withContext(Dispatchers.IO) {
         while (true) {
-            val sock = try { server.accept() } catch (e: IOException) { throw CancellationException("closed") }
+            val sock = try { kotlinx.coroutines.runInterruptible { server.accept() } } catch (e: IOException) { throw CancellationException("closed") }
             sock.use { s ->
-                val line = s.getInputStream().bufferedReader().readLine().orEmpty() // GET /callback?code=… HTTP/1.1
+                s.soTimeout = 3000
+                val line = try { kotlinx.coroutines.runInterruptible {
+                    val input = s.getInputStream()
+                    val request = StringBuilder()
+                    while (request.length < 8192) {
+                        val ch = input.read()
+                        if (ch < 0 || ch == 10) break
+                        request.append(ch.toChar())
+                    }
+                    request.toString()
+                } } catch (_: java.net.SocketTimeoutException) { return@use }
+                if (line.length >= 8192 || !line.startsWith("GET ")) { respond(s, 400, "Invalid request"); return@use }
                 val target = line.split(' ').getOrNull(1).orEmpty()
                 if (target.substringBefore('?') != "/callback") { respond(s, 404, "Not found"); return@use }
                 val q = target.substringAfter('?', "")
@@ -282,7 +293,10 @@ class LoopbackCallback(private val returnUri: String? = null) {
                     return@use
                 }
                 val ok = params["error"] == null
-                val link = returnUri?.let { "<p><a href='$it'>Return to Hermes</a></p>" }.orEmpty()
+                val link = returnUri?.let {
+                    val safe = it.replace("&", "&amp;").replace("'", "&#39;").replace("<", "&lt;")
+                    "<p><a id='return' href='$safe'>Return to Hermes</a></p><script>document.getElementById('return').click()</script>"
+                }.orEmpty()
                 respond(s, 200, "<html><body style='font-family:sans-serif;text-align:center;padding:48px'><h2>${if (ok) "Approval received" else "Sign-in declined"}</h2><p>Return to Hermes to finish connecting.</p>$link</body></html>")
                 return@withContext params
             }

@@ -1,5 +1,6 @@
 package com.ersaz.hermesmobile.agent.tools
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -19,13 +20,41 @@ class AnalyzeLinkTool : Tool("analyze_link", "web",
         if (!ctx.runtime.sandbox.installBundledMedia()) return@withLock fail("Bundled media runtime could not be installed")
         val out = "/root/outputs/media-${UUID.randomUUID()}"
         fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
+        val model = java.io.File(ctx.runtime.app.filesDir, "media-models/ggml-tiny.bin")
         val result = JSONObject(TerminalTool().run(JSONObject()
-            .put("command", "python3 /root/.hermes/media/extract_media.py ${quote(url)} --output ${quote(out)}")
+            .put("command", "python3 /root/.hermes/media/extract_media.py ${quote(url)} --output ${quote(out)}${if (model.isFile) " --audio" else ""}")
             .put("workdir", "/root").put("timeout", 90), ctx))
         if (result.optInt("exit_code", -1) != 0) return@withLock fail("Media unavailable or extraction failed. No transcript was obtained.")
         val evidenceFile = ctx.runtime.sandbox.hostPath("$out/evidence.json")
         if (!evidenceFile.isFile || evidenceFile.length() > 2_000_000) return@withLock fail("No bounded media evidence produced")
         val evidence = JSONObject(evidenceFile.readText())
+        val cli = runCatching { JSONObject(result.optString("output")) }.getOrNull()
+        val audioPath = cli?.optString("audio_path").orEmpty()
+        if (model.isFile && audioPath == "$out/audio.wav") {
+            val audio = ctx.runtime.sandbox.hostPath(audioPath)
+            try {
+                val transcript = kotlinx.coroutines.coroutineScope {
+                    val computation = async(kotlinx.coroutines.Dispatchers.IO) {
+                        com.ersaz.hermesmobile.media.WhisperBridge.transcribe(model.absolutePath, audio.absolutePath)
+                    }
+                    try { computation.await() }
+                    catch (e: kotlinx.coroutines.CancellationException) {
+                        com.ersaz.hermesmobile.media.WhisperBridge.cancel(); throw e
+                    }
+                }
+                val spoken = JSONObject(transcript)
+                evidence.put("coverage", spoken.getString("coverage")).put("method", spoken.getString("method"))
+                    .put("segments", spoken.getJSONArray("segments")).put("limitation", "Audio transcript only; visual content was not analyzed.")
+                val segments = spoken.getJSONArray("segments")
+                ctx.runtime.sandbox.hostPath("$out/transcript.txt").writeText((0 until segments.length()).joinToString("\n") {
+                    val segment = segments.getJSONObject(it)
+                    "[${segment.optDouble("start")}s] ${segment.optString("text")}"
+                })
+                evidenceFile.writeText(evidence.toString())
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { evidence.put("limitation", "Offline transcription failed; only the listed metadata was obtained.") }
+            finally { audio.delete() }
+        }
         listOf("evidence.json", "transcript.txt").forEach { name ->
             val file = ctx.runtime.sandbox.hostPath("$out/$name")
             if (file.isFile) ctx.listener.onFile(ctx.runtime.generatedFiles.capture(file).absolutePath)
