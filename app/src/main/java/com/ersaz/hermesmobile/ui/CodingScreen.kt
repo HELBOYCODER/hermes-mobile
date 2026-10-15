@@ -35,16 +35,6 @@ fun CodingScreen(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNav
         vm.input = "Work in $path. $task Use the matching bundled skill, inspect the repository and its instructions before edits, and keep credentials in Environment."
         onChat()
     }
-    fun openCode(command: String) {
-        if (rt.sandbox.state.value !is com.ersaz.hermesmobile.sandbox.Sandbox.State.Ready) {
-            error = "Linux sandbox is not ready. Open Terminal and repair it first."
-            onNavigate("Terminal")
-            return
-        }
-        val session = TerminalTabs.sessions.getOrNull(TerminalTabs.current) ?: TerminalTabs.newSession(rt)
-        session.write("hermes-opencode $command\n")
-        onNavigate("Terminal")
-    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Build with context", color = skin.title, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
         Hint("A focused workspace for exploring, changing and reviewing code. Your chosen model runs the task; these workflows prepare a draft for you to review before sending.")
@@ -52,12 +42,6 @@ fun CodingScreen(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNav
         OutlinedTextField(project, { project = it; error = "" }, label = { Text("Project path") }, placeholder = { Text("/root/projects/my-app") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = skin.error, fontSize = 12.sp)
         TextButton(onClick = { onNavigate("Terminal") }) { Text("Open Terminal to clone or create a project") }
-        SectionTitle("OpenCode (official CLI)")
-        Hint("OpenCode uses the Alpine terminal. Its models are not yet connected to Hermes chat.")
-        SettingsHubRow("Install OpenCode", "Install official CLI with npm", Icons.Default.Download) { openCode("install") }
-        SettingsHubRow("OpenCode login", "Official interactive provider sign-in", Icons.Default.Login) { openCode("login") }
-        SettingsHubRow("List OpenCode models", "Models available to the CLI", Icons.Default.List) { openCode("models") }
-        SettingsHubRow("Run OpenCode", "Launch coding agent in terminal", Icons.Default.Terminal) { openCode("run") }
         SectionTitle("Coding workflows")
         SettingsHubRow("Explore repository", "Map architecture, dependencies and test commands", Icons.Default.AccountTree) { prepare("Explore the repository with the explore-repository skill. Explain its architecture, entry points, build/test commands and current Git state without changing files.") }
         SettingsHubRow("Implement a feature", "Inspect, plan, edit and verify a focused change", Icons.Default.Code) { prepare("Use the implement-feature skill. First ask what feature I want, then implement and verify it within the existing architecture.") }
