@@ -7,6 +7,7 @@ import com.ersaz.hermesmobile.core.parseArgs
 import com.ersaz.hermesmobile.llm.LlmClient
 import com.ersaz.hermesmobile.llm.StreamSink
 import kotlinx.coroutines.CancellationException
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
