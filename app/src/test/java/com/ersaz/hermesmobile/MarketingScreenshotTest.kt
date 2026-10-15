@@ -2,6 +2,10 @@ package com.ersaz.hermesmobile
 
 import android.app.Application
 import android.graphics.Bitmap
+import androidx.test.core.app.ApplicationProvider
+import com.ersaz.hermesmobile.ui.ChatScreen
+import com.ersaz.hermesmobile.ui.ChatViewModel
+import com.ersaz.hermesmobile.ui.ChatItem
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
@@ -41,6 +45,19 @@ class MarketingScreenshotTest {
         target.parentFile.mkdirs()
         target.outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         check(target.length() > 1000)
+    }
+    @Test fun chatPersianDemo() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        app.applicationInfo.nativeLibraryDir = app.filesDir.absolutePath
+        val vm = ChatViewModel(app)
+        vm.items.clear()
+        vm.items.add(ChatItem.User("demo-user", "برای پروژهٔ من یک برنامهٔ پیاده‌سازی بنویس؛ هدف، مراحل کار و معیار پذیرش را مشخص کن.", emptyList()))
+        vm.items.add(ChatItem.Assistant("demo-assistant", "## از ایده تا اجرا\n\nابتدا هدف و محدودیت‌های پروژه را ثبت می‌کنیم. سپس مراحل کار را به وظایف کوچک و قابل بررسی تقسیم می‌کنیم.\n\n### مسیر پیشنهادی\n\n1. مشخص‌کردن نیازها و معیار پذیرش\n2. نوشتن طرح و وظایف\n3. پیاده‌سازی و بررسی تغییرات\n4. اجرای تست و ثبت نتیجه\n\nبرای شروع، زبان برنامه‌نویسی و خروجی موردنظرت را بگو."))
+        compose.setContent { HermesTheme(Skins.all.first()) { Surface(Modifier.fillMaxSize(), color = Skins.all.first().bg) { ChatScreen(vm) } } }
+        compose.waitForIdle()
+        val target = File("build/marketing-screenshots/hermes-chat-persian-demo.png")
+        target.parentFile.mkdirs()
+        target.outputStream().use { check(compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)) }
     }
     @Test fun settingsDark() = capture("hermes-settings-dark", "nous")
     @Test fun settingsLight() = capture("hermes-settings-light", "nous-light")
