@@ -1,7 +1,14 @@
 ---
 name: video-shorts-editor
-description: Turn long YouTube videos into compelling 30 to 60 second shorts with accurate captions.
+description: Inspect real video assets and render verified short-form edits when ffmpeg/ffprobe are available.
 ---
 
-# video-shorts-editor
-Confirm permission to use source media. Transcribe with timestamps; score highlights for self-contained meaning and hook; choose 30-60 seconds; cut with FFmpeg; reframe for 9:16 with subject-aware crop where available; burn readable captions and export 1080x1920 MP4. Check sync, rights and actual output. Never claim highlight extraction without media analysis.
+# Executable short-video editing
+
+- Identify input media, ownership/permission, desired duration, target aspect ratio, subtitles, audio and export location.
+- Check the actual sandbox first: `command -v ffmpeg && command -v ffprobe`. If unavailable, explain the missing dependency; do not pretend a video was rendered or install packages without approval.
+- Inspect the source with `ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of json INPUT`; quote file paths safely and never concatenate untrusted strings into shell commands.
+- Use ffmpeg for real transformations (trim, crop/pad, scale, subtitles when supported, audio normalization). Prefer a deterministic command and preserve the original.
+- Render to a new output file. Verify nonzero size, decodable audio/video streams, duration and dimensions with ffprobe, and sample decode with `ffmpeg -v error -i OUTPUT -f null -`.
+- If captions/transcripts require unavailable speech recognition, label them manual or pending; never fabricate timing.
+- Return the exact output path, render command, probe result, duration, resolution, and any failed checks. A written editing plan is not a completed render.
