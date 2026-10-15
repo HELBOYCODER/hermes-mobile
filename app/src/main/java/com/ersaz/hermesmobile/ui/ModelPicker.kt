@@ -60,6 +60,7 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
     var msg by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
+    var connectingZen by remember { mutableStateOf(false) }
     remember { store.ensureCurrent(Providers.byId(rt.settings.provider).label); 0 }
 
     LaunchedEffect(Unit) {
@@ -132,11 +133,15 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                     }
                 }) { Text("Fetch from provider") }
                 OutlinedButton(onClick = { adding = true }) { Text("Add model") }
+                OutlinedButton(onClick = { connectingZen = true }) { Text("OpenCode Zen") }
             }
             Spacer(Modifier.size(20.dp))
         }
     }
 
+    if (connectingZen) OpenCodeZenDialog(rt, onDismiss = { connectingZen = false }) { p ->
+        store.upsert(p); store.select(p); vm.modelChanged(); connectingZen = false; onDismiss()
+    }
     if (adding) AddModelDialog(onDismiss = { adding = false }) { p -> store.upsert(p); store.select(p); vm.modelChanged(); adding = false; onDismiss() }
 }
 
@@ -229,4 +234,32 @@ fun ModelPickerDialog(rt: HermesRuntime, current: String, onPick: (ModelInfo) ->
 fun HermesRuntime.useModel(m: ModelInfo) {
     settings.model = m.id
     if (m.contextLength > 0) settings.contextLength = m.contextLength.coerceAtMost(200_000)
+}
+
+/** Zen supports official API keys; website login does not provide a third-party OAuth callback. */
+@Composable
+private fun OpenCodeZenDialog(rt: HermesRuntime, onDismiss: () -> Unit, onAdd: (ModelProfile) -> Unit) {
+    var key by remember { mutableStateOf("") }
+    var model by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Connect OpenCode Zen API") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("OpenCode Zen requires an API key from your account. Website sign-in alone does not authorize Hermes. Some models are paid or use a different API endpoint.")
+                TextButton(onClick = {
+                    com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.open(rt.app, "https://opencode.ai/zen")
+                }) { Text("Open official OpenCode Zen website") }
+                Field("Zen API key", key, secret = true) { key = it.trim() }
+                Field("Chat-completions model ID", model) { model = it.trim() }
+                Text("Only chat-completions models are supported here. Models using /responses or other endpoints need separate integration. Free access is not guaranteed.")
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = key.isNotBlank() && model.isNotBlank(), onClick = {
+                onAdd(ModelProfile("OpenCode Zen API", "custom", "https://opencode.ai/zen/v1", key, model, false, "manual"))
+            }) { Text("Save API connection") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
