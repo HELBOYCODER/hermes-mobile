@@ -14,8 +14,8 @@ fun checkpointStore(rt: HermesRuntime, root: File): WorkspaceCheckpoint {
     val hash = MessageDigest.getInstance("SHA-256").digest(root.canonicalPath.toByteArray()).joinToString("") { "%02x".format(it) }
     return WorkspaceCheckpoint(root, File(rt.hermesHome, "checkpoints/$hash"))
 }
-private val writeLock = Any()
-fun trackedProjectWrite(rt: HermesRuntime, file: File, write: () -> Unit) = synchronized(writeLock) {
+internal val projectMutationLock = Any()
+fun trackedProjectWrite(rt: HermesRuntime, file: File, write: () -> Unit) = synchronized(projectMutationLock) {
     val root = runCatching { projectRoot(rt) }.getOrNull()
     val target = file.canonicalFile
     if (root == null || !target.path.startsWith(root.path + File.separator) || target.relativeTo(root).invariantSeparatorsPath.split('/').contains(".git")) {

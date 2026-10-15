@@ -20,10 +20,11 @@ static jstring utf8(JNIEnv *e,const std::string &s) {
  auto cl=e->FindClass("java/lang/String");auto ctor=e->GetMethodID(cl,"<init>","([BLjava/lang/String;)V");auto enc=e->NewStringUTF("UTF-8");
  auto result=(jstring)e->NewObject(cl,ctor,bytes,enc);e->DeleteLocalRef(bytes);e->DeleteLocalRef(enc);return result;
 }
+extern "C" JNIEXPORT void JNICALL Java_com_ersaz_hermesmobile_media_WhisperBridge_prepare(JNIEnv*,jobject) {cancelled=false;}
 extern "C" JNIEXPORT void JNICALL Java_com_ersaz_hermesmobile_media_WhisperBridge_cancel(JNIEnv*,jobject) {cancelled=true;}
 extern "C" JNIEXPORT jstring JNICALL Java_com_ersaz_hermesmobile_media_WhisperBridge_transcribe(JNIEnv *e,jobject,jstring model,jstring audio) {
  try {
- cancelled=false;
+ if(cancelled)throw std::runtime_error("Transcription cancelled");
  std::ifstream f(path(e,audio),std::ios::binary|std::ios::ate);auto size=f.tellg();
  if(size<44 || size>100*1024*1024)throw std::runtime_error("Invalid or oversized WAV");
  std::vector<unsigned char> bytes(static_cast<size_t>(size));f.seekg(0);f.read((char*)bytes.data(),bytes.size());if(!f)throw std::runtime_error("Cannot read audio");
@@ -39,6 +40,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_ersaz_hermesmobile_media_WhisperBr
  if(pcm.empty())throw std::runtime_error("No PCM audio");bytes.clear();bytes.shrink_to_fit();
  auto cp=whisper_context_default_params();cp.use_gpu=false;
  std::unique_ptr<whisper_context,decltype(&whisper_free)> ctx(whisper_init_from_file_with_params(path(e,model).c_str(),cp),whisper_free);
+ if(cancelled)throw std::runtime_error("Transcription cancelled");
  if(!ctx)throw std::runtime_error("Cannot load model");
  auto p=whisper_full_default_params(WHISPER_SAMPLING_GREEDY);p.n_threads=4;p.language="auto";p.translate=false;p.print_realtime=false;p.print_progress=false;p.print_timestamps=false;p.print_special=false;
  p.abort_callback=[](void*){return cancelled.load();};

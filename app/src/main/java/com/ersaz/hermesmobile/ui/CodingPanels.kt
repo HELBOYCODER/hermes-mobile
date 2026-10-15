@@ -1,6 +1,8 @@
 package com.ersaz.hermesmobile.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -20,6 +22,7 @@ fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit) {
     var message by remember { mutableStateOf("") }
     var checkpoints by remember { mutableStateOf(emptyList<String>()) }
     var tasks by remember { mutableStateOf("") }
+    var preview by remember { mutableStateOf("") }
     var restore by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     fun refresh() {
@@ -56,14 +59,22 @@ fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit) {
     SectionTitle("File checkpoints")
     Text("File-tool edits inside the selected project are checkpointed. Terminal changes need Git review. Restore stops if a file has changed since the checkpoint.", color = skin.dim)
     checkpoints.take(10).forEach { id ->
-        TextButton(enabled = !busy, onClick = { restore = id }) { Text("Review / restore ${id.take(8)}") }
+        TextButton(enabled = !busy && !vm.busy, onClick = {
+            scope.launch {
+                preview = withContext(Dispatchers.IO) { runCatching { checkpointStore(rt, projectRoot(rt)).preview(id) }.getOrDefault("Preview unavailable") }
+                restore = id
+            }
+        }) { Text("Review / restore ${id.take(8)}") }
     }
     if (checkpoints.isEmpty()) Text("No checkpoints yet", color = skin.dim)
     if (message.isNotBlank()) Text(message, color = skin.warn)
     restore?.let { id ->
         AlertDialog(onDismissRequest = { restore = null }, title = { Text("Restore this checkpoint?") },
-            text = { Text("Only checkpointed files with matching current content will be restored. Later edits stop the operation.") },
-            confirmButton = { TextButton(onClick = {
+            text = { Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                Text("Only matching checkpointed files will be restored. Later edits stop the operation. Preview is limited to 4000 characters per side.")
+                Text(preview, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            } },
+            confirmButton = { TextButton(enabled = !vm.busy, onClick = {
                 restore = null; busy = true
                 scope.launch {
                     message = try { withContext(Dispatchers.IO) {

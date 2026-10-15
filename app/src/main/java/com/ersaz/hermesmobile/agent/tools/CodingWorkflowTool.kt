@@ -32,7 +32,7 @@ class CodingWorkflowTool : Tool("coding_workflow", "file",
                 if (ctx.agent.tools().none { it.name == "terminal" }) return@withContext fail("Enable the terminal tool before running project tests")
                 val command = args.getString("command").trim(); require(command.isNotEmpty() && command.length <= 4000)
                 val id = UUID.randomUUID().toString()
-                tasks.recordRun(id, null, "RUNNING", command)
+                tasks.recordRun(id, null, "RUNNING", redact(ctx, command))
                 try {
                     val raw = TerminalTool().run(JSONObject().put("command", command).put("workdir", ctx.runtime.sandbox.guestPath(root)).put("timeout", 180), ctx)
                     val result = JSONObject(raw)

@@ -38,7 +38,7 @@ class WorkspaceCheckpoint(private val root: File, private val storage: File = Fi
         }
         data.put("sealed", true); save(id, data)
     }
-    fun restore(id: String): RestoreResult = synchronized(lock) {
+    fun restore(id: String): RestoreResult = synchronized(projectMutationLock) { synchronized(lock) {
         val data = load(id)
         val entries = data.getJSONArray("files")
         val conflicts = (0 until entries.length()).map { entries.getJSONObject(it) }.filter { e ->
@@ -57,6 +57,16 @@ class WorkspaceCheckpoint(private val root: File, private val storage: File = Fi
         // Single-use restore: a second click must not overwrite later work.
         data.put("sealed", false);save(id, data)
         RestoreResult.Restored
+    } }
+    fun preview(id: String): String = synchronized(lock) {
+        val entries = load(id).getJSONArray("files")
+        (0 until entries.length()).joinToString("\n\n") { i ->
+            val entry = entries.getJSONObject(i)
+            val file = resolveProjectFile(root, entry.getString("path"))
+            val before = if (entry.getBoolean("existed")) String(Base64.getDecoder().decode(entry.getString("before")), Charsets.UTF_8) else "[absent]"
+            val current = if (file.isFile && file.length() <= 1_048_576) file.readText() else "[absent or too large]"
+            "${entry.getString("path")}\n--- Checkpoint (restore target)\n${before.take(4000)}\n+++ Current file\n${current.take(4000)}"
+        }.take(16000)
     }
     fun list(): List<String> = storage.listFiles { f -> f.name.endsWith(".json") }?.sortedByDescending { it.lastModified() }
         ?.take(20)?.map { it.nameWithoutExtension }.orEmpty()

@@ -1,6 +1,7 @@
 package com.ersaz.hermesmobile.agent.tools
 
 import kotlinx.coroutines.async
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -19,6 +20,7 @@ class AnalyzeLinkTool : Tool("analyze_link", "web",
             return@withLock fail("Use a public HTTPS YouTube or Instagram link")
         if (!ctx.runtime.sandbox.installBundledMedia()) return@withLock fail("Bundled media runtime could not be installed")
         val out = "/root/outputs/media-${UUID.randomUUID()}"
+        try {
         fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
         val model = java.io.File(ctx.runtime.app.filesDir, "media-models/ggml-tiny.bin")
         val result = JSONObject(TerminalTool().run(JSONObject()
@@ -33,8 +35,10 @@ class AnalyzeLinkTool : Tool("analyze_link", "web",
         if (model.isFile && audioPath == "$out/audio.wav") {
             val audio = ctx.runtime.sandbox.hostPath(audioPath)
             try {
+                com.ersaz.hermesmobile.media.WhisperBridge.prepare()
                 val transcript = kotlinx.coroutines.coroutineScope {
                     val computation = async(kotlinx.coroutines.Dispatchers.IO) {
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         com.ersaz.hermesmobile.media.WhisperBridge.transcribe(model.absolutePath, audio.absolutePath)
                     }
                     try { computation.await() }
@@ -52,6 +56,7 @@ class AnalyzeLinkTool : Tool("analyze_link", "web",
                 })
                 evidenceFile.writeText(evidence.toString())
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: LinkageError) { evidence.put("limitation", "Native transcription engine unavailable on this device.") }
             catch (e: Exception) { evidence.put("limitation", "Offline transcription failed; only the listed metadata was obtained.") }
             finally { audio.delete() }
         }
@@ -60,6 +65,9 @@ class AnalyzeLinkTool : Tool("analyze_link", "web",
             if (file.isFile) ctx.listener.onFile(ctx.runtime.generatedFiles.capture(file).absolutePath)
         }
         evidence.toString().take(60000)
+        } finally {
+            ctx.runtime.sandbox.hostPath(out).listFiles()?.filter { it.name.startsWith("audio.") }?.forEach { it.delete() }
+        }
     }
     companion object {
         private val jobs = Mutex()
