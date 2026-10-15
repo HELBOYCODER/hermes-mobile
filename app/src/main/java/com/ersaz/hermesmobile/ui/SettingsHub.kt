@@ -44,10 +44,20 @@ fun SettingsHub(onSelect: (SettingsCategory) -> Unit, onNavigate: (String) -> Un
         Text("Accounts, tools and your device — one place for each.", color = skin.dim, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp))
         OutlinedTextField(query, { query = it }, leadingIcon = { Icon(Icons.Default.Search, null) }, placeholder = { Text("Search settings") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if (query.isBlank()) {
+            SettingsHubRow("Startup recovery", "Open safely or resume normal startup", Icons.Default.HealthAndSafety) {
+                onNavigate("Recovery")
+            }
             SectionTitle("Development workspace")
             SettingsHubRow("Coding workspace", "Projects, coding workflows and local MCP", Icons.Default.Code) { onNavigate("Coding") }
             SettingsHubRow("MCP servers", "Connected tools and ready-to-add integrations", Icons.Default.Extension) { onNavigate("Mcp") }
             SettingsHubRow("Skills library", "Reusable development and debugging workflows", Icons.Default.AutoStories) { onNavigate("Skills") }
+            listOf("Terminal", "Files", "Browser", "SubAgents").forEach { route ->
+                SettingsHubRow(route, "Development tools", Icons.Default.Build) { onNavigate(route) }
+            }
+            SectionTitle("Automation & diagnostics")
+            listOf("Memory", "Cron", "Gateway", "WebUi", "Usage", "Logs").forEach { route ->
+                SettingsHubRow(route, "Open ${route.lowercase()}", Icons.Default.Tune) { onNavigate(route) }
+            }
         }
         matching.groupBy { it.group }.forEach { (group, categories) ->
             SectionTitle(group)

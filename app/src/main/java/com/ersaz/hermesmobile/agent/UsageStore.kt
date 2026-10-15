@@ -30,8 +30,8 @@ class UsageStore(private val file: File) {
         val root = read()
         val cutoff = dayFmt.format(Date(now - days * 86_400_000L))
         return root.keys().asSequence().filter { it >= cutoff }.sorted().flatMap { day ->
-            val d = root.getJSONObject(day)
-            d.keys().asSequence().map { model -> val m = d.getJSONObject(model); Row(day, model, m.optInt("calls"), m.optLong("prompt"), m.optLong("completion")) }
+            val d = root.optJSONObject(day) ?: return@flatMap emptySequence<Row>()
+            d.keys().asSequence().mapNotNull { model -> val m = d.optJSONObject(model) ?: return@mapNotNull null; Row(day, model, m.optInt("calls").coerceAtLeast(0), m.optLong("prompt").coerceAtLeast(0), m.optLong("completion").coerceAtLeast(0)) }
         }.toList()
     }
 

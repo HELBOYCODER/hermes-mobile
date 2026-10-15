@@ -61,7 +61,7 @@ fun UsageScreen(rt: HermesRuntime) {
                 Text(day.drop(5), color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.width(48.dp))
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f).height(10.dp)) {
                     androidx.compose.foundation.layout.Box(
-                        Modifier.fillMaxWidth(tokens.toFloat() / maxDay).height(10.dp)
+                        Modifier.fillMaxWidth((tokens.toFloat() / maxDay).let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }).height(10.dp)
                             .background(skin.accent, androidx.compose.foundation.shape.RoundedCornerShape(5.dp)),
                     )
                 }

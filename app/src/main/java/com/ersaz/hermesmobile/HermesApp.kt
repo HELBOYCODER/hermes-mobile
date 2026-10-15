@@ -16,10 +16,13 @@ class HermesApp : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         })
-        val rt = HermesRuntime.get(this)
-        if (rt.settings.botMode || rt.cron.all().any { it.enabled }) {
-            runCatching { com.ersaz.hermesmobile.service.HermesService.start(this) }
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                java.io.File(filesDir, "last-crash.txt").writeText(error.stackTraceToString().take(32000))
+                getSharedPreferences("recovery", MODE_PRIVATE).edit().putBoolean("crashed", true).commit()
+            }
+            previous?.uncaughtException(thread, error)
         }
-        rt.mcp.connectAllAsync()
     }
 }
