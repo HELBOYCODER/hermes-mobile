@@ -28,6 +28,7 @@ class ScreenStartupTest {
     }
     @Test fun mcpPageOpensWithBundledServers() {
         val application = ApplicationProvider.getApplicationContext<Application>()
+        application.applicationInfo.nativeLibraryDir = application.filesDir.absolutePath
         val rt = HermesRuntime(application)
         (listOf(CodingDefaults.server().copy(enabled = false)) + CodingDefaults.optionalServers()).forEach { rt.mcp.store.upsert(it) }
         compose.setContent { HermesTheme(Skins.all.first()) { McpScreen(rt) } }
