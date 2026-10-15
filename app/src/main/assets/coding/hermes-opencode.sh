@@ -21,13 +21,18 @@ case "${1:-help}" in
     command -v opencode >/dev/null 2>&1 || { echo "First install the CLI."; exit 2; }
     exec opencode models
     ;;
+  serve)
+    command -v opencode >/dev/null 2>&1 || { echo "First install the CLI."; exit 2; }
+    echo "Starting official OpenCode server on localhost only."
+    exec opencode serve --hostname 127.0.0.1 --port 4096
+    ;;
   run)
     shift
     command -v opencode >/dev/null 2>&1 || { echo "First install the CLI."; exit 2; }
     exec opencode "$@"
     ;;
   *)
-    echo "Usage: hermes-opencode {install|login|models|run [args...]}"
+    echo "Usage: hermes-opencode {install|login|models|serve|run [args...]}"
     echo "Free-tier eligibility is decided by OpenCode. Paid models are not unlocked by login alone."
     ;;
 esac
