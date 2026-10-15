@@ -1,10 +1,10 @@
 # Hermes Mobile | هرمس موبایل
 
-**Android · ARM64 · 2.3.4**
+**Android · ARM64 · 2.4.0**
 
-[**دانلود فایل نصبی / Download APK — 2.3.4**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.3.4/hermes-mobile-2.3.4-arm64.apk)
+[**دانلود فایل نصبی / Download APK — 2.4.0**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.4.0/hermes-mobile-2.4.0-arm64.apk)
 
-[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.3.4)
+[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.4.0)
 
 ## فارسی
 
@@ -21,9 +21,16 @@
 
 ### تغییرات این نسخه
 
-- جهت و تراز متن فارسی و انگلیسی بر اساس هر پاراگراف؛ بلوک کد چپ‌به‌راست می‌ماند.
-- بخش Environment بالای تنظیمات، با افزودن/ویرایش/حذف و مقدارهای پنهان و رمزگذاری‌شده.
-- کپی پیام کاربر و تلاش مجدد آخرین پیام ناموفق با حفظ پیوست‌ها.
+- صفحهٔ اصلی تنظیمات با جست‌وجو، دسته‌بندی و آیکون؛ هر بخش صفحهٔ جدا دارد.
+- منوی اصلی در گروه‌های گفت‌وگو، توسعه، اتوماسیون و برنامه سازمان‌دهی شده است.
+- دکمه‌های پیام فقط **Copy** و **Retry** هستند.
+- فضای Coding workspace برای انتخاب مسیر پروژه و آماده‌سازی درخواست بررسی ریپو، پیاده‌سازی، بازبینی و رفع تست ناموفق.
+- MCP محلی **Hermes Code** با ابزارهای نمای پروژه، جست‌وجوی متن و بررسی تغییرات Git؛ بدون کلید خارجی، در `/root/projects` و فقط برای خواندن.
+- اسکیل‌های پیش‌فرض explore-repository، implement-feature، review-code و verify-changes در کنار اسکیل‌های قبلی دیباگ و تست.
+- تنظیم آمادهٔ Context7 و GitHub MCP به‌صورت غیرفعال؛ کلید را در Environment ذخیره کنید و سپس سرور را فعال کنید.
+
+- فایل‌های خروجی داخل چت با Download، Open و Share نمایش داده می‌شوند؛ Download در Downloads/Hermes ذخیره می‌کند. خروجی‌های /root/outputs بعد از اجرای ابزار خودکار بررسی می‌شوند و ابزار send_file فایل‌های مسیرهای دیگر را پیوست می‌کند.
+- لینک‌های HTTP(S) ساده و Markdown قابل لمس هستند؛ بلوک‌های کد دکمهٔ Copy code دارند.
 
 ### امکانات
 
@@ -39,7 +46,7 @@
 
 ### وضعیت OpenCode Free
 
-در نسخهٔ ۲.۳.۴ کاتالوگ OpenCode Free از OpenCode Zen جدا شده است، اما نمایش مدل در فهرست به معنی قابل استفاده بودن آن نیست. خطای گزارش‌شدهٔ `403 FreeTierError` می‌گوید سرویس رایگان فقط از داخل OpenCode قابل استفاده است. موفقیت درخواست واقعی این مدل‌ها از هرمس تأیید نشده است؛ این نسخه رفع آن محدودیت را تضمین نمی‌کند.
+در نسخهٔ ۲.۴.۰ کاتالوگ OpenCode Free از OpenCode Zen جدا شده است، اما نمایش مدل در فهرست به معنی قابل استفاده بودن آن نیست. خطای گزارش‌شدهٔ `403 FreeTierError` می‌گوید سرویس رایگان فقط از داخل OpenCode قابل استفاده است. موفقیت درخواست واقعی این مدل‌ها از هرمس تأیید نشده است؛ این نسخه رفع آن محدودیت را تضمین نمی‌کند.
 
 ### تصاویر داخل برنامه
 
@@ -60,9 +67,18 @@ If Android rejects an update because of a signing-key mismatch, back up importan
 
 ### Changes in this version
 
-- Content-based paragraph direction and alignment for Persian and English; code blocks remain LTR.
-- Environment editor at the top of Settings, with masked values and Android Keystore encryption.
-- Copy user messages and retry the latest failed turn with original attachments.
+- Searchable settings hub with grouped icon rows and separate detail pages.
+- Main navigation grouped into Conversations, Development, Automation & connections, and App.
+- English-only **Copy** and **Retry** actions.
+- Coding workspace with project path and reviewable draft workflows for exploration, implementation, review and debugging.
+- Bundled **Hermes Code** MCP: read-only project overview, literal source search and Git changes inside `/root/projects`; no external account or package download.
+- Four new bundled skills: explore-repository, implement-feature, review-code and verify-changes.
+- Disabled-by-default Context7 documentation and official GitHub read-only MCP presets. Set the required key in Environment, then enable. These external integrations require internet and have not been verified with a live account here.
+
+[Context7 setup](https://context7.com/docs/resources/all-clients) · [GitHub MCP documentation](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+
+- Generated file cards include Download, Open and Share. Downloads are saved to Downloads/Hermes. Changed files under /root/outputs are detected after tool execution; send_file attaches deliverables elsewhere. Files are snapshotted independently of working files (512 MB per attachment).
+- Plain HTTP(S) links and Markdown links are clickable; code blocks include Copy code.
 
 ### Features
 
@@ -78,7 +94,7 @@ No Termux installation or root access is required. Online models, account login,
 
 ### OpenCode Free status
 
-Version 2.3.4 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
+Version 2.4.0 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
 
 ### In-app screenshots
 
@@ -86,5 +102,5 @@ Real screenshots of this version have not yet been added.
 
 ## Download integrity / صحت فایل
 
-File: `hermes-mobile-2.3.4-arm64.apk`
+File: `hermes-mobile-2.4.0-arm64.apk`
 The APK is built and published by GitHub Actions. See the release asset for its SHA-256 digest.

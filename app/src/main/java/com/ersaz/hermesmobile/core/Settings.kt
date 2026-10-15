@@ -97,6 +97,7 @@ class Settings(context: Context) : NousTokenStore {
     var braveKey by str("brave_key", "")
     var bindSharedStorage by bool("bind_storage", false)
     var prootNoSeccomp by bool("proot_no_seccomp", false)
+    var codingProject by str("coding_project", "/root/projects")
     var sandboxEnv: String
         @Synchronized get() {
             val stored = prefs.getString("sandbox_env", "").orEmpty()

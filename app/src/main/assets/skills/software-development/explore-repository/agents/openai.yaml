@@ -1,0 +1,4 @@
+interface:
+  display_name: "Explore Repository"
+  short_description: "Map architecture, build commands and Git state"
+  default_prompt: "Use $explore-repository to work on the selected project."

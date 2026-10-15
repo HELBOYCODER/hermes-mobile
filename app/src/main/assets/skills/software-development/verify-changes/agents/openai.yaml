@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify Changes"
+  short_description: "Run relevant checks and report evidence honestly"
+  default_prompt: "Use $verify-changes to work on the selected project."

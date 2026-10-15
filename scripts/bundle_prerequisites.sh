@@ -21,7 +21,7 @@ tar --no-same-owner -xzf "$ASSET" -C "$WORK/rootfs"
 # certificate generation is performed by the one-tap on-device installer.
 SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}" "$WORK/sbin/apk.static" \
   --root "$WORK/rootfs" --arch aarch64 --no-scripts add --no-cache \
-  ca-certificates ca-certificates-bundle bash curl git python3 py3-pip nodejs npm build-base linux-headers openssl
+  ca-certificates ca-certificates-bundle bash curl git python3 py3-pip nodejs npm build-base linux-headers openssl ripgrep
 for executable in node npm python3 git curl; do
   test -e "$WORK/rootfs/usr/bin/$executable" || test -L "$WORK/rootfs/usr/bin/$executable"
 done

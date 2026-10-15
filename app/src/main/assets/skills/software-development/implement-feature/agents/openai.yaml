@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Feature"
+  short_description: "Build a scoped feature and verify its behavior"
+  default_prompt: "Use $implement-feature to work on the selected project."

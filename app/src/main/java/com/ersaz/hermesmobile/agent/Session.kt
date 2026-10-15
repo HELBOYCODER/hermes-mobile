@@ -36,10 +36,12 @@ data class Message(
     val timestamp: Long = System.currentTimeMillis(),
     val localId: String = UUID.randomUUID().toString(),
     val failureReason: String? = null,
+    val generatedFiles: List<String> = emptyList(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject().put("role", role).put("content", content).put("ts", timestamp).put("local_id", localId)
         failureReason?.let { o.put("failure_reason", it) }
+        if (generatedFiles.isNotEmpty()) o.put("generated_files", JSONArray(generatedFiles))
         if (toolCalls.isNotEmpty()) o.put("tool_calls", JSONArray().also { a -> toolCalls.forEach { a.put(it.toJson()) } })
         toolCallId?.let { o.put("tool_call_id", it) }
         name?.let { o.put("name", it) }
@@ -79,6 +81,7 @@ data class Message(
             timestamp = o.optLong("ts", System.currentTimeMillis()),
             localId = o.optString("local_id").ifBlank { UUID.randomUUID().toString() },
             failureReason = o.optStringOrNull("failure_reason"),
+            generatedFiles = o.optJSONArray("generated_files")?.strings() ?: emptyList(),
         )
     }
 }

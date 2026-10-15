@@ -56,6 +56,7 @@ class HermesRuntime(val app: Application) {
 
     /** $HERMES_HOME == /root/.hermes inside the sandbox rootfs. */
     val hermesHome: File = File(sandbox.rootfs, "root/.hermes").apply { mkdirs() }
+    val generatedFiles = com.ersaz.hermesmobile.files.GeneratedFiles(sandbox.rootfs, File(hermesHome, "deliveries"))
     val sessions = SessionStore(File(hermesHome, "sessions"))
     val memory = MemoryStore(File(hermesHome, "memories"))
     val skills = SkillStore(File(hermesHome, "skills"))
@@ -86,6 +87,8 @@ class HermesRuntime(val app: Application) {
             if (!soul.exists()) soul.writeText(com.ersaz.hermesmobile.agent.PromptBuilder.DEFAULT_IDENTITY + "\n")
             if (sandbox.payloadAvailable()) sandbox.ensureInstalled()
             runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
+            runCatching { com.ersaz.hermesmobile.coding.CodingPack.install(this@HermesRuntime) }
+                .onFailure { log.e("coding", "Coding tools setup failed: ${it.message}") }
             bridge.start()
             router.autoStartIfNeeded()
         }

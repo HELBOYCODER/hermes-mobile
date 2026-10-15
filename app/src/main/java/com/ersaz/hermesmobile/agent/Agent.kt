@@ -7,6 +7,7 @@ import com.ersaz.hermesmobile.core.parseArgs
 import com.ersaz.hermesmobile.llm.LlmClient
 import com.ersaz.hermesmobile.llm.StreamSink
 import kotlinx.coroutines.CancellationException
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -21,6 +22,7 @@ interface AgentListener {
     fun onStatus(text: String) {}
     fun onError(text: String) { onStatus(text) }
     fun onMedia(path: String) {}
+    fun onFile(path: String) { onMedia(path) }
     /** Return true to allow a command flagged as dangerous. */
     suspend fun requestApproval(command: String, reason: String): Boolean = false
     /** Ask the user a clarifying question; null = no interactive surface. */
@@ -77,6 +79,38 @@ class Agent(
             val index = session.messages.indexOfFirst { it.localId == userMessage.localId }
             if (index >= 0) session.messages[index] = session.messages[index].copy(failureReason = text)
             runtime.sessions.save(session)
+        }
+        val downstream = listener
+        val delivered = userMessage.generatedFiles.toMutableSet()
+        val listener = object : AgentListener by downstream {
+            private fun record(path: String): Boolean {
+                val storedPath = runtime.sandbox.guestPath(File(path))
+                if (!delivered.add(storedPath)) return false
+                val index = session.messages.indexOfFirst { it.localId == userMessage.localId }
+                if (index >= 0) session.messages[index] = session.messages[index].copy(generatedFiles = delivered.toList())
+                runtime.sessions.save(session)
+                return true
+            }
+            override fun onFile(path: String) { if (record(path)) downstream.onFile(path) }
+            override fun onMedia(path: String) {
+                if (runtime.generatedFiles.isDelivered(File(path))) { if (record(path)) downstream.onMedia(path) }
+                else downstream.onMedia(path)
+            }
+        }
+        val outputs = runtime.sandbox.hostPath("/root/outputs").apply { mkdirs() }
+        suspend fun outputState() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            outputs.walkTopDown().maxDepth(5).filter { it.isFile && !it.name.startsWith(".") && it.extension !in setOf("tmp", "part") }
+                .take(200).associate { it.canonicalPath to (it.lastModified() to it.length()) }
+        }
+        var knownOutputs = outputState()
+        suspend fun deliverOutputs() {
+            val current = outputState()
+            current.filter { (path, stamp) -> knownOutputs[path] != stamp }.keys.forEach { path ->
+                runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runtime.generatedFiles.capture(File(path)) } }
+                    .onSuccess { listener.onFile(it.absolutePath) }
+                    .onFailure { listener.onStatus("Could not attach ${File(path).name}: ${it.message}") }
+            }
+            knownOutputs = current
         }
         try {
             val settings = runtime.settings
@@ -166,6 +200,7 @@ class Agent(
                     listener.onToolEnd(call, capped, System.currentTimeMillis() - started)
                     session.messages += Message("tool", capped, toolCallId = call.id, name = call.name)
                 }
+                deliverOutputs()
                 runtime.sessions.save(session)
                 if (loopStop) {
                     finalText = "⚠️ Stopped: I kept repeating the same `${r.toolCalls.last().name}` call with the same result. Tell me how you'd like to proceed."
@@ -173,6 +208,14 @@ class Agent(
                     break
                 }
             }
+            val linkedFiles = Regex("""\[[^\]]*]\(([^)]+)\)""").findAll(finalText)
+                .mapNotNull { com.ersaz.hermesmobile.files.WebLinks.localTarget(it.groupValues[1]) }.distinct().take(20)
+            linkedFiles.forEach { guest ->
+                runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runtime.generatedFiles.capture(runtime.sandbox.hostPath(guest, cwd))
+                } }.onSuccess { listener.onFile(it.absolutePath) }
+            }
+            deliverOutputs()
             runtime.sessions.save(session)
             if (session.title.isBlank()) runtime.titleSessionAsync(session)
             return finalText
@@ -299,7 +342,7 @@ object PromptBuilder {
     private const val SKILLS_GUIDANCE = "When you work out a non-trivial workflow, record it with skill_manage for future reuse."
 
     private const val ENVIRONMENT =
-        "## Environment\nYou run inside the Hermes Android app on the user's phone. Your terminal is a sandboxed Alpine Linux " +
+        "## Environment\nFor final deliverables, write files to /root/outputs and call send_file with each completed file. The app attaches changed files from that output folder automatically after tool execution. Use send_file for deliverables elsewhere. Use ordinary HTTPS or Markdown links for websites. Never claim a missing file is attached.\nYou run inside the Hermes Android app on the user's phone. Your terminal is a sandboxed Alpine Linux " +
         "(aarch64, PRoot — no root on the host, but you are root inside). Home is /root; HERMES_HOME is /root/.hermes. " +
         "Install software with `apk add <pkg>` (e.g. python3, py3-pip, git, nodejs, curl, ffmpeg). Shared phone storage is " +
         "at /sdcard only when the user enabled it in Settings. Long-running servers should use terminal(background=true) " +
@@ -366,7 +409,9 @@ object PromptBuilder {
 
     /** Per-call suffix that must not be frozen into the cached prompt (todo list state). */
     fun volatileSuffix(runtime: HermesRuntime, agent: Agent): String {
-        val mcp = runtime.mcp.promptBlock()?.let { "\n\n$it" }.orEmpty()
+        val delivery = "\n\n## Deliverables\nWrite completed deliverables to /root/outputs and use send_file when available. Changed files there are attached automatically after tool execution; use send_file for other paths. Never claim an attachment exists without creating it. Use HTTP(S) links for websites."
+        val coding = "\n\n## Coding workflows\nFor coding tasks, load the matching bundled skill with skill_view: explore-repository, implement-feature, review-code, verify-changes."
+        val mcp = delivery + coding + runtime.mcp.promptBlock()?.let { "\n\n$it" }.orEmpty()
         val todos = agent.session.todos
         if (todos.isEmpty()) return mcp
         return mcp + "\n\n## Current task list\n" + todos.joinToString("\n") { t ->

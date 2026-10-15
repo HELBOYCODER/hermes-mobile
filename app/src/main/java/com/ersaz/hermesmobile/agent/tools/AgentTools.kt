@@ -387,8 +387,9 @@ class TextToSpeechTool : Tool(
 
     override suspend fun run(args: JSONObject, ctx: ToolContext): String {
         val path = ctx.runtime.speech.synthesize(args.optString("text"), args.optString("language")) ?: return fail("TTS engine unavailable")
-        ctx.listener.onMedia(path.absolutePath)
-        return ok("file" to ctx.runtime.sandbox.guestPath(path), "note" to "Audio delivered to the user. MEDIA:${path.absolutePath}")
+        val delivered = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ctx.runtime.generatedFiles.capture(path) }
+        ctx.listener.onMedia(delivered.absolutePath)
+        return ok("file" to ctx.runtime.sandbox.guestPath(delivered), "note" to "Audio delivered to the user.")
     }
 }
 

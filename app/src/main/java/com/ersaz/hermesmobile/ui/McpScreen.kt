@@ -53,6 +53,8 @@ fun McpScreen(rt: HermesRuntime) {
     var confirmDelete by remember { mutableStateOf<McpServer?>(null) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        SectionTitle("Coding integrations")
+        Hint("Hermes Code is bundled and works locally in /root/projects. Context7 and GitHub are preconfigured but disabled until you add the required key and enable them. Header placeholders such as \${GITHUB_TOKEN} read Environment; never paste keys into chat.")
         Hint("MCP servers give Hermes new tools — GitHub, Notion, databases, search… Paste a server address and Hermes connects, checks it, and opens the sign-in page itself if the server needs a login.")
         Card {
             OutlinedTextField(
