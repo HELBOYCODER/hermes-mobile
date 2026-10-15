@@ -171,7 +171,7 @@ class Sandbox(private val context: Context, private val settings: Settings) {
             cliScript.outputStream().use { output -> input.copyTo(output) }
         }
         File(rootfs, "usr/local/bin/hermes-opencode").apply {
-            writeText("#!/bin/sh\nexec /bin/sh /root/.hermes/coding/hermes-opencode.sh \"\\$@\"\n")
+            writeText("#!/bin/sh\nexec /bin/sh /root/.hermes/coding/hermes-opencode.sh \"\$@\"\n")
             runCatching { Os.chmod(absolutePath, "755".toInt(8)) }
         }
         File(rootfs, "usr/local/bin/hermes").apply {
