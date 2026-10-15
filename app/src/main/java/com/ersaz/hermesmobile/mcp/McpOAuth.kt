@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Base64
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -258,7 +259,7 @@ class McpOAuth(private val context: Context, private val http: OkHttpClient, val
 
 /** One-shot HTTP server on 127.0.0.1 that receives the browser redirect. */
 class LoopbackCallback(private val returnUri: String? = null) {
-    private val server: ServerSocket = bind()
+    private val server: ServerSocket = bind().apply { soTimeout = 500 }
     val redirectUri: String get() = "http://127.0.0.1:${server.localPort}/callback"
 
     private fun bind(): ServerSocket {
@@ -268,7 +269,10 @@ class LoopbackCallback(private val returnUri: String? = null) {
 
     suspend fun await(expectedState: String? = null): Map<String, String> = withContext(Dispatchers.IO) {
         while (true) {
-            val sock = try { kotlinx.coroutines.runInterruptible { server.accept() } } catch (e: IOException) { throw CancellationException("closed") }
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            val sock = try { server.accept() }
+                catch (_: java.net.SocketTimeoutException) { continue }
+                catch (e: IOException) { throw CancellationException("closed") }
             sock.use { s ->
                 s.soTimeout = 3000
                 val line = try { kotlinx.coroutines.runInterruptible {

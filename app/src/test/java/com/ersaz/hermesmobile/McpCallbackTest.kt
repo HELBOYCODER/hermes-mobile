@@ -19,4 +19,13 @@ class McpCallbackTest {
    assertEquals("ok",result.await()["code"])
   } finally {cb.close()}
  }
+ @Test fun noBrowserResponseCanBeCancelledWithinBound()=runBlocking {
+  val cb=LoopbackCallback()
+  try {
+   val waiting=launch(Dispatchers.IO) { cb.await("expected") }
+   delay(100)
+   withTimeout(2000) { waiting.cancelAndJoin() }
+   assertTrue(waiting.isCancelled)
+  } finally {cb.close()}
+ }
 }

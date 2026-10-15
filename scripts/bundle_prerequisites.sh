@@ -25,7 +25,7 @@ SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}" "$WORK/sbin
 # Capture base runtime so upgrades can receive media dependencies without replacing user data.
 python3 "$ROOT/scripts/media_runtime_pack.py" snapshot "$WORK/rootfs" "$WORK/media-runtime.bin.json"
 SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}" "$WORK/sbin/apk.static" \
-  --root "$WORK/rootfs" --arch aarch64 --no-scripts add --no-cache ffmpeg py3-requests
+  --root "$WORK/rootfs" --arch aarch64 --no-scripts add --no-cache ffmpeg py3-requests py3-defusedxml
 mkdir -p "$WORK/media-wheels"
 python3 -m pip download --no-deps --only-binary=:all: --dest "$WORK/media-wheels" \
   yt-dlp==2026.8.19 yt-dlp-ejs==0.8.0 youtube-transcript-api==1.2.4

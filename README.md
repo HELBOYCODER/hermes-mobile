@@ -1,10 +1,10 @@
 # Hermes Mobile | هرمس موبایل
 
-**Android · ARM64 · 2.4.1**
+**Android · ARM64 · 2.5.0**
 
-[**دانلود فایل نصبی / Download APK — 2.4.1**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.4.1/hermes-mobile-2.4.1-arm64.apk)
+[**دانلود فایل نصبی / Download APK — 2.5.0**](https://github.com/HELBOYCODER/hermes-mobile/releases/download/v2.5.0/hermes-mobile-2.5.0-arm64.apk)
 
-[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.4.1)
+[جزئیات نسخه / Release details](https://github.com/HELBOYCODER/hermes-mobile/releases/tag/v2.5.0)
 
 ## فارسی
 
@@ -20,6 +20,16 @@
 اگر اندروید به‌دلیل تفاوت امضای نسخهٔ قبلی اجازهٔ به‌روزرسانی نداد، پیش از حذف نسخهٔ قبلی از اطلاعات مهم خود پشتیبان بگیرید.
 
 ### تغییرات این نسخه
+
+- ورود Nous پس از تأیید حساب از انتخاب مدل جدا شده است؛ خطای مدل، حساب متصل را خارج نمی‌کند. درخواست ورود ناتمام رمزگذاری می‌شود و پس از بسته‌شدن فرایند از همان مهلت قبلی ادامه می‌یابد.
+- دکمهٔ **Test** کنار مدل‌ها، بدون ارسال تاریخچه یا تغییر مدل فعال؛ مدل‌های پولی پیش از تست تأیید هزینه می‌گیرند.
+- ابزارهای چت، فایل‌های همان گفتگو، تاریخ‌بندی نشست‌ها و نشانگر پردازش ساده‌تر.
+- گردش کار مبتنی بر قالب‌های Spec Kit، دستورالعمل‌های کدنویسی/دیباگ Superpowers، وظایف ماندگار و شواهد واقعی تست. تکمیل وظیفه به شناسهٔ تست موفق ذخیره‌شده نیاز دارد.
+- برای ویرایش‌های ابزار فایل در پروژهٔ انتخاب‌شده checkpoint ایجاد می‌شود؛ بازیابی در صورت تغییر بعدی فایل متوقف می‌شود. تغییرات ترمینال باید با Git بررسی شوند.
+- لینک عمومی یوتیوب/اینستاگرام در پیام مستقل، کپشن و اطلاعات قابل دسترس را استخراج و فایل قابل دانلود تولید می‌کند. نبود کپشن، محدودیت محتوا یا خطای سرویس صریحاً گزارش می‌شود.
+- موتور بومی Whisper چندزبانه؛ مدل tiny اختیاری ۷۷٫۷ مگابایتی از **Coding → Offline transcription** دانلود و با SHA-256 بررسی می‌شود. فایل صوتی عمومی در نبود کپشن قابل تبدیل به متن است؛ تحلیل تصویر و ویدئو ادعا نمی‌شود.
+- فهرست منابع، مجوزها و پیش‌نیازهای اتصال Context7، GitHub، Serena، Playwright و ابزارهای تست؛ سرویس نیازمند میزبان جداگانه به‌عنوان نصب‌شده نمایش داده نمی‌شود.
+
 
 - بازیابی مستقل پس از کرش با **Open safely**؛ چت‌ها و تنظیمات پاک نمی‌شوند. ورود امن اجرای خودکار MCP، روتر و سرویس پس‌زمینه را متوقف می‌کند. برای اجرای عادی از Settings → Startup recovery استفاده کنید.
 - آمار خراب باعث بسته‌شدن صفحهٔ مصرف نمی‌شود؛ خطاهای راه‌اندازی پس‌زمینه و نگه‌داشتن CPU ثبت و مهار می‌شوند.
@@ -46,7 +56,7 @@
 - Alpine و PRoot همراه Node.js، npm، Python، pip، Git و گواهی‌های TLS.
 - پیوست فایل و تصویر.
 
-نصب Termux یا روت لازم نیست. مدل‌های آنلاین، ورود حساب و تشخیص گفتار به اینترنت نیاز دارند.
+نصب Termux یا روت لازم نیست. مدل‌های آنلاین و ورود حساب به اینترنت نیاز دارند. تبدیل صوت آفلاین پس از دانلود مدل اختیاری انجام می‌شود.
 
 ### وضعیت OpenCode Free
 
@@ -70,6 +80,14 @@ Hermes Mobile is an Android app for AI conversations, agent tools, persistent me
 If Android rejects an update because of a signing-key mismatch, back up important data before uninstalling the previous app.
 
 ### Changes in this version
+
+- Account authorization survives model-configuration failure; encrypted pending Nous device grants resume within their original expiry. MCP browser approval attempts a return to Hermes, with a manual return link.
+- Inline **Test** sends a minimal synthetic request without chat history or changing selection; paid/unknown models require cost confirmation.
+- Scoped chat files, date-grouped conversations and a restrained processing indicator.
+- Pinned Spec Kit templates and Superpowers coding references, persistent tasks, real saved test evidence and conflict-aware file-tool checkpoints. Terminal mutations still require Git review.
+- Public YouTube/Instagram link evidence with downloadable captions/metadata. Optional native multilingual Whisper tiny model (77.7 MB, SHA-256 verified) transcribes accessible audio when captions are missing. Metadata is explicitly distinguished from transcripts; visuals are not analyzed.
+- Integration catalogue documents sources, licenses and setup requirements. Remote/CI tools require their own host; they are not silently installed or reported ready.
+
 
 - Independent crash recovery with **Open safely**, preserving chats and settings. Safe startup skips automatic MCP, router and background service startup. Use Settings → Startup recovery to resume normal startup.
 - Malformed usage data no longer crashes statistics. Background and CPU wake-lock failures are logged and handled.
@@ -103,7 +121,7 @@ No Termux installation or root access is required. Online models, account login,
 
 ### OpenCode Free status
 
-Version 2.4.1 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
+Version 2.5.0 separates OpenCode Free from OpenCode Zen in the catalog. A listed model is not proof that inference works. The reported `403 FreeTierError` states that the free tier can only be used within OpenCode. Successful inference through Hermes has not been verified; this APK does not promise to resolve that restriction.
 
 ### In-app screenshots
 
@@ -111,5 +129,5 @@ Real screenshots of this version have not yet been added.
 
 ## Download integrity / صحت فایل
 
-File: `hermes-mobile-2.4.1-arm64.apk`
+File: `hermes-mobile-2.5.0-arm64.apk`
 The APK is built and published by GitHub Actions. See the release asset for its SHA-256 digest.

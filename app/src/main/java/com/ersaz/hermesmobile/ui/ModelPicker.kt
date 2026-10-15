@@ -201,6 +201,8 @@ fun ModelPickerDialog(rt: HermesRuntime, current: String, onPick: (ModelInfo) ->
                                 Text(m.name, color = if (m.id == current) skin.accent else skin.text, fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                 if (m.free) Text("  FREE", color = skin.ok, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                ModelProbeAction(rt, com.ersaz.hermesmobile.core.ModelProfile(
+                                    m.name, rt.settings.provider, rt.settings.baseUrl, rt.settings.apiKey, m.id, m.free, "fetched", m.priceLabel()))
                             }
                             val extras = listOfNotNull(
                                 m.id.takeIf { it != m.name },

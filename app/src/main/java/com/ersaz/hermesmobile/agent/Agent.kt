@@ -132,7 +132,11 @@ class Agent(
                     listener.onToolStart(call)
                     val started = System.currentTimeMillis()
                     val evidence = try { media.run(org.json.JSONObject(call.arguments), ToolContext(runtime, this, listener)) }
-                    catch (e: CancellationException) { throw e }
+                    catch (e: CancellationException) {
+                        session.messages += Message("tool", "Media extraction cancelled. No complete evidence obtained.", toolCallId = call.id, name = call.name)
+                        runtime.sessions.save(session)
+                        throw e
+                    }
                     catch (e: Exception) { "{\"error\":\"Media extraction unavailable\",\"coverage\":\"none\"}" }
                     session.messages += Message("tool", evidence, toolCallId = call.id, name = call.name)
                     listener.onToolEnd(call, evidence, System.currentTimeMillis() - started)
