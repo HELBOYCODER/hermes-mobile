@@ -25,6 +25,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.ersaz.hermesmobile.files.WebLinks
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -39,6 +40,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
     val skin = LocalSkin.current
     val blocks = remember(text) { splitBlocks(text) }
     val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     SelectionContainer {
         Column(modifier) {
             for (b in blocks) {
@@ -47,7 +49,11 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
                         Modifier.fillMaxWidth().padding(vertical = 4.dp)
                             .background(skin.surface, RoundedCornerShape(8.dp)).padding(10.dp)
                     ) {
-                        if (b.lang.isNotBlank()) Text(b.lang, color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+                            Text(b.lang.ifBlank { "Code" }, color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            androidx.compose.material3.TextButton(onClick = { clipboard.setText(AnnotatedString(b.text)) }) { Text("Copy code", fontSize = 11.sp) }
+                        }
                         Row(Modifier.horizontalScroll(rememberScrollState())) {
                             Text(b.text, style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left), color = skin.text, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 17.sp)
                         }
@@ -59,7 +65,9 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
                         val annotated = inline(b.text, skin.accent, skin.label, skin.surface)
                         androidx.compose.foundation.text.ClickableText(
                             annotated, modifier = Modifier.fillMaxWidth(), style = androidx.compose.ui.text.TextStyle(color = skin.text, fontSize = 15.sp, lineHeight = 21.sp, textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start),
-                            onClick = { off -> annotated.getStringAnnotations("URL", off, off).firstOrNull()?.let { runCatching { uri.openUri(it.item) } } },
+                            onClick = { off -> annotated.getStringAnnotations("URL", off, off).firstOrNull()?.let { link ->
+                                openChatLink(context, link.item) { uri.openUri(it) }
+                            } },
                         )
                     }
                 }
@@ -183,7 +191,7 @@ private fun splitBlocks(text: String): List<Block> {
     return out
 }
 
-private val inlineRx = Regex("""(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\s][^*]*\*|_[^_\s][^_]*_|\[[^\]]+\]\([^)]+\))""")
+private val inlineRx = Regex("""(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\s][^*]*\*|_[^_\s][^_]*_|\[[^\]]+\]\([^)]+\)|https?://[^\s<>()]+)""")
 
 fun inline(src: String, accent: androidx.compose.ui.graphics.Color, label: androidx.compose.ui.graphics.Color,
            codeBg: androidx.compose.ui.graphics.Color): AnnotatedString = buildAnnotatedString {
@@ -220,7 +228,7 @@ private fun AnnotatedString.Builder.appendInline(text: String, accent: androidx.
         append(text.substring(last, m.range.first))
         val t = m.value
         when {
-            t.startsWith("**") || t.startsWith("__") -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(t.substring(2, t.length - 2)) }
+            t.startsWith("**") || t.startsWith("__") -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { appendInline(t.substring(2, t.length - 2), accent, label, codeBg) }
             t.startsWith("`") -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg, color = label)) { append(t.trim('`')) }
             t.startsWith("[") -> {
                 val label2 = t.substring(1, t.indexOf(']'))
@@ -229,9 +237,34 @@ private fun AnnotatedString.Builder.appendInline(text: String, accent: androidx.
                 withStyle(SpanStyle(color = accent, textDecoration = TextDecoration.Underline)) { append(label2) }
                 pop()
             }
-            else -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(t.substring(1, t.length - 1)) }
+            t.startsWith("http://") || t.startsWith("https://") -> {
+                val target = WebLinks.webTarget(t)
+                if (target == null) append(t) else {
+                    pushStringAnnotation("URL", target)
+                    withStyle(SpanStyle(color = accent, textDecoration = TextDecoration.Underline)) { append(target) }
+                    pop()
+                    append(t.removePrefix(target))
+                }
+            }
+            else -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { appendInline(t.substring(1, t.length - 1), accent, label, codeBg) }
         }
         last = m.range.last + 1
     }
     append(text.substring(last))
+}
+
+private fun openChatLink(context: android.content.Context, target: String, openWeb: (String) -> Unit) {
+    runCatching {
+        val web = WebLinks.webTarget(target)
+        if (web != null) openWeb(web) else {
+            val guest = WebLinks.localTarget(target) ?: error("Unsupported or invalid link")
+            val rt = com.ersaz.hermesmobile.HermesRuntime.get(context)
+            val file = rt.sandbox.hostPath(android.net.Uri.decode(guest)).canonicalFile
+            require(file.isFile && file.toPath().startsWith(rt.sandbox.rootfs.canonicalFile.toPath())) { "File is not available" }
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri,
+                com.ersaz.hermesmobile.files.DownloadsExporter.mime(file))
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }.onFailure { android.widget.Toast.makeText(context, it.message ?: "Could not open link", android.widget.Toast.LENGTH_SHORT).show() }
 }

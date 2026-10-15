@@ -107,6 +107,7 @@ jobs:
           body: |
             فارسی: تنظیمات دسته‌بندی‌شده با جست‌وجو و آیکون، منوی گروه‌بندی‌شده، دکمه‌های انگلیسی Copy و Retry و فضای کدنویسی پروژه.
             English: Searchable settings hub, grouped navigation, English Copy/Retry, and a project coding workspace.
+            Generated file cards: Download to Downloads/Hermes, Open and Share; plain web links are clickable and code blocks have Copy code.
             Bundled read-only Hermes Code MCP: project overview, source search and Git changes in /root/projects. Four new coding skills included.
             Context7 and official GitHub read-only MCP presets are disabled until configured. External credentials/internet required; live external integration is not verified.
             Existing voice, Nous account login, Bot Mode, encrypted Environment and local 9Router remain included.

@@ -56,6 +56,7 @@ class HermesRuntime(val app: Application) {
 
     /** $HERMES_HOME == /root/.hermes inside the sandbox rootfs. */
     val hermesHome: File = File(sandbox.rootfs, "root/.hermes").apply { mkdirs() }
+    val generatedFiles = com.ersaz.hermesmobile.files.GeneratedFiles(sandbox.rootfs, File(hermesHome, "deliveries"))
     val sessions = SessionStore(File(hermesHome, "sessions"))
     val memory = MemoryStore(File(hermesHome, "memories"))
     val skills = SkillStore(File(hermesHome, "skills"))

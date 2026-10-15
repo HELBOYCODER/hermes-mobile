@@ -446,7 +446,7 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
                     val clip = androidx.compose.ui.platform.LocalClipboardManager.current
                     Row {
                         Text("🔊 read", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { rt.speech.speak(com.ersaz.hermesmobile.ui.plainSpeech(item.text)) }.padding(end = 14.dp, top = 4.dp))
-                        Text("⧉ copy", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { clip.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }.padding(top = 4.dp))
+                        Text("⧉ Copy", color = skin.dim, fontSize = 11.sp, modifier = Modifier.clickable { clip.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }.padding(top = 4.dp))
                     }
                 }
             }
@@ -477,7 +477,9 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
         is ChatItem.Info -> Text(item.text, style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), color = if (item.isError) skin.error else skin.label, fontSize = 13.sp,
             fontFamily = if (item.text.lines().size > 2) FontFamily.Monospace else FontFamily.Default,
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(skin.surface).padding(12.dp))
+        is ChatItem.FileOutput -> GeneratedFileCard(item.path)
         is ChatItem.Media -> {
+            GeneratedFileCard(item.path)
             val rt = com.ersaz.hermesmobile.HermesRuntime.get(LocalContext.current)
             Text("🔊 ${java.io.File(item.path).name}  ▶ play", color = skin.accent,
                 modifier = Modifier.clickable { rt.speech.play(java.io.File(item.path)) }.padding(vertical = 6.dp))

@@ -29,6 +29,9 @@
 - اسکیل‌های پیش‌فرض explore-repository، implement-feature، review-code و verify-changes در کنار اسکیل‌های قبلی دیباگ و تست.
 - تنظیم آمادهٔ Context7 و GitHub MCP به‌صورت غیرفعال؛ کلید را در Environment ذخیره کنید و سپس سرور را فعال کنید.
 
+- فایل‌های خروجی داخل چت با Download، Open و Share نمایش داده می‌شوند؛ Download در Downloads/Hermes ذخیره می‌کند. خروجی‌های /root/outputs بعد از اجرای ابزار خودکار بررسی می‌شوند و ابزار send_file فایل‌های مسیرهای دیگر را پیوست می‌کند.
+- لینک‌های HTTP(S) ساده و Markdown قابل لمس هستند؛ بلوک‌های کد دکمهٔ Copy code دارند.
+
 ### امکانات
 
 - ایجنت، ابزارها، حافظهٔ ماندگار و اسکیل‌ها.
@@ -73,6 +76,9 @@ If Android rejects an update because of a signing-key mismatch, back up importan
 - Disabled-by-default Context7 documentation and official GitHub read-only MCP presets. Set the required key in Environment, then enable. These external integrations require internet and have not been verified with a live account here.
 
 [Context7 setup](https://context7.com/docs/resources/all-clients) · [GitHub MCP documentation](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+
+- Generated file cards include Download, Open and Share. Downloads are saved to Downloads/Hermes. Changed files under /root/outputs are detected after tool execution; send_file attaches deliverables elsewhere. Files are snapshotted independently of working files (512 MB per attachment).
+- Plain HTTP(S) links and Markdown links are clickable; code blocks include Copy code.
 
 ### Features
 

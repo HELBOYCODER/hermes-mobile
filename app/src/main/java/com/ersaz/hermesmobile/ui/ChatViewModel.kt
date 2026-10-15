@@ -45,6 +45,7 @@ sealed class ChatItem {
 
     class Info(override val key: String, val text: String, val isError: Boolean = false) : ChatItem()
     class Media(override val key: String, val path: String) : ChatItem()
+    class FileOutput(override val key: String, val path: String) : ChatItem()
 }
 
 class ApprovalRequest(val command: String, val reason: String, val result: CompletableDeferred<Pair<Boolean, Boolean>>)
@@ -193,9 +194,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
         runtime.agentJobs.registerSink(agent.session.id, jobSink)
         items.clear()
         val toolItems = mutableMapOf<String, ChatItem.Tool>()
+        var pendingOutputs = emptyList<String>()
         for (m in agent.session.messages) {
             when (m.role) {
                 "user" -> {
+                    pendingOutputs.forEach { path -> items += ChatItem.FileOutput(k(), runtime.sandbox.hostPath(path).absolutePath) }
+                    pendingOutputs = m.generatedFiles
                     val shown = when {
                         m.content.startsWith("[SYSTEM: The user invoked") -> "⚡ " + m.content.substringAfter("\"").substringBefore("\"") + " skill"
                         m.content.startsWith("[CONTEXT COMPACTION") -> null.also { items += ChatItem.Info(k(), "🗜️ Earlier turns were compressed") }
@@ -213,6 +217,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 "tool" -> toolItems[m.toolCallId]?.result = m.content
             }
         }
+        pendingOutputs.forEach { path -> items += ChatItem.FileOutput(k(), runtime.sandbox.hostPath(path).absolutePath) }
         refreshMeta()
     }
 
@@ -381,6 +386,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
                 }
                 override fun onStatus(text: String) = ui { items += ChatItem.Info(k(), text) }
                 override fun onError(text: String) = ui { failed = true; current?.streaming = false }
+                override fun onFile(path: String) = ui { items += ChatItem.FileOutput(k(), path) }
                 override fun onMedia(path: String) = ui {
                     items += ChatItem.Media(k(), path)
                     runtime.speech.play(File(path))
