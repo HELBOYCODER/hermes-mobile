@@ -162,7 +162,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale * fs),
             ) { HermesTheme(skin) {
-                var dest by remember { mutableStateOf(Dest.Chat) }
+                var dest by androidx.compose.runtime.remember { mutableStateOf(Dest.Chat) }
                 BackHandler(dest != Dest.Chat) { dest = Dest.Chat }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
