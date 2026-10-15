@@ -284,7 +284,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     }
 
     fun clearChat() {
-        if (busy) stop()
+        if (busy) return
         agent.session.messages.clear()
         agent.session.todos.clear()
         agent.session.title = ""

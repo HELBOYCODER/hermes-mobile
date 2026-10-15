@@ -58,7 +58,7 @@ class WriteFileTool : Tool(
         val f = ctx.resolve(args.optString("path"))
         f.parentFile?.mkdirs()
         val content = args.optString("content")
-        f.writeText(content)
+        com.ersaz.hermesmobile.coding.trackedProjectWrite(ctx.runtime, f) { f.writeText(content) }
         ok("path" to args.optString("path"), "bytes_written" to content.toByteArray().size, "lines" to content.lines().size)
     }
 }
@@ -96,7 +96,7 @@ class PatchTool : Tool(
         }
         if (count > 1 && !args.optBoolean("replace_all")) return@withContext fail("old_string matches $count times; add context or set replace_all=true.")
         val updated = if (args.optBoolean("replace_all")) text.replace(target, new) else text.replaceFirst(target, new)
-        f.writeText(updated)
+        com.ersaz.hermesmobile.coding.trackedProjectWrite(ctx.runtime, f) { f.writeText(updated) }
         val line = text.substring(0, text.indexOf(target).coerceAtLeast(0)).count { it == '\n' } + 1
         ok("path" to args.optString("path"), "replacements" to if (args.optBoolean("replace_all")) count else 1, "first_line" to line)
     }

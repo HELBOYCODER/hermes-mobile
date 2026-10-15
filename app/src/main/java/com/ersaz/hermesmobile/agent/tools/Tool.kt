@@ -79,7 +79,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
     val all: List<Tool> by lazy {
         listOf(
             TerminalTool(), ProcessTool(),
-            ReadFileTool(), WriteFileTool(), PatchTool(), SearchFilesTool(), SendFileTool(),
+            ReadFileTool(), WriteFileTool(), PatchTool(), SearchFilesTool(), SendFileTool(), CodingWorkflowTool(),
             WebSearchTool(), WebExtractTool(),
             MemoryTool(),
             SkillsListTool(), SkillViewTool(), SkillManageTool(),

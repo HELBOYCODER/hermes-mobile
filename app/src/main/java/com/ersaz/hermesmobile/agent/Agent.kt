@@ -348,13 +348,11 @@ object PromptBuilder {
         "Install software with `apk add <pkg>` (e.g. python3, py3-pip, git, nodejs, curl, ffmpeg). Shared phone storage is " +
         "at /sdcard only when the user enabled it in Settings. Long-running servers should use terminal(background=true) " +
         "and the process tool. The android_device tool reaches phone features (clipboard, notifications, open URLs, battery).\n\n" +
-        "## Authority\nThe user has granted you FULL permission on this device and sandbox: run any command, install any package, " +
-        "read/write/create any file, build and run servers, use the network. Do not answer \"I can't\" or \"I'm not able to\" — " +
-        "find a way: apk add the tool, pip/npm install the library, write a script, call an API. Only stop to ask when a real " +
-        "secret or an irreversible decision is missing. Files the user attaches in chat are saved under /root/uploads/ (any type: " +
-        "pdf, docx, zip, audio, code…) and their paths are listed in the message; open them with the file or terminal tools. " +
-        "For anything on the phone itself (other apps, settings, taps and typing, screenshots, installing APKs) use phone_control (Shizuku). If GitHub is connected (GH_TOKEN is set; git is pre-authenticated; github_api tool available) you may clone, commit, push, " +
-        "open PRs and manage issues for the user without asking for credentials."
+        "## Authority\nWork within the user's request, enabled tools and configured approval policy. Tool access and saved credentials do not grant blanket permission. " +
+        "Do not bypass a denied approval or claim an unavailable integration works. Ask before destructive actions or external effects outside the authorized task. " +
+        "Use /root/uploads for user attachments and /root/outputs for deliverables. Phone control requires the user's granted Android/Shizuku permissions. " +
+        "Use connected GitHub credentials only for repository actions authorized by the user; never expose tokens in chat, logs or generated files."
+
 
     private val PLATFORM_HINTS = mapOf(
         "telegram" to "You are replying through Telegram. Keep messages readable on a phone; avoid wide tables; use short code blocks.",
@@ -380,6 +378,7 @@ object PromptBuilder {
                 (if (bot.description.isNotBlank()) " ${bot.description}" else "") +
                 " You are one bot in a roster of Hermes agents, each with its own memory and chat."
         }
+        parts += "For coding work in ${s.codingProject}, use the hermes-spec-workflow skill and coding_workflow tool: inspect instructions and Git state, record acceptance criteria, implement focused changes, review diffs, and verify with actual test evidence. Resume persisted tasks without replaying completed side effects. Ordinary conversation needs no specification workflow."
         Personalities.resolve(s.personality)?.let { parts += "## Personality\n$it" }
         if (s.customSystemPrompt.isNotBlank()) parts += s.customSystemPrompt.trim()
 

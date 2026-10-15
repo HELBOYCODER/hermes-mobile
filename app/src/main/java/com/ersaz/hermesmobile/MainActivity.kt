@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         if (clear) androidx.compose.material3.AlertDialog(onDismissRequest = { clear = false },
                                             title = { Text("Clear this chat?") }, text = { Text("Messages in this session will be removed.") },
-                                            confirmButton = { androidx.compose.material3.TextButton(onClick = { clear = false; vm.clearChat() }) { Text("Clear Chat") } },
+                                            confirmButton = { androidx.compose.material3.TextButton(enabled = !vm.busy, onClick = { clear = false; vm.clearChat() }) { Text("Clear Chat") } },
                                             dismissButton = { androidx.compose.material3.TextButton(onClick = { clear = false }) { Text("Cancel") } })
                                     }
                                     if (dest != Dest.Terminal) IconButton(onClick = { dest = Dest.Terminal }) { Icon(Icons.Default.Terminal, "terminal", tint = skin.label) }

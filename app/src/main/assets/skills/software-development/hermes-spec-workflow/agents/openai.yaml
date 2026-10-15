@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hermes Spec Workflow"
+  short_description: "Specify, implement and verify project changes"
+  default_prompt: "Use the project specification and actual test evidence to complete this coding task."
