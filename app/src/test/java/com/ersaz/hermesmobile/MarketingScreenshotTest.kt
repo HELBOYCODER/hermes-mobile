@@ -2,6 +2,8 @@ package com.ersaz.hermesmobile
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.activity.ComponentActivity
 import androidx.test.core.app.ApplicationProvider
 import com.ersaz.hermesmobile.ui.ChatScreen
 import com.ersaz.hermesmobile.ui.ChatViewModel
@@ -11,7 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import com.ersaz.hermesmobile.ui.SettingsHub
 import com.ersaz.hermesmobile.ui.theme.HermesTheme
@@ -31,7 +33,7 @@ import org.robolectric.annotation.LooperMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class MarketingScreenshotTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private fun capture(name: String, skinName: String) {
         val skin = Skins.all.first { it.name == skinName }
         compose.setContent {
@@ -40,9 +42,11 @@ class MarketingScreenshotTest {
             }
         }
         compose.waitForIdle()
-        val image = compose.onRoot().captureToImage().asAndroidBitmap()
+        val view = compose.activity.window.decorView
+        val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        compose.runOnUiThread { view.draw(Canvas(image)) }
         val target = File("build/marketing-screenshots/$name.png")
-        target.parentFile.mkdirs()
+        target.parentFile!!.mkdirs()
         target.outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         check(target.length() > 1000)
     }
@@ -56,8 +60,13 @@ class MarketingScreenshotTest {
         compose.setContent { HermesTheme(Skins.all.first()) { Surface(Modifier.fillMaxSize(), color = Skins.all.first().bg) { ChatScreen(vm) } } }
         compose.waitForIdle()
         val target = File("build/marketing-screenshots/hermes-chat-persian-demo.png")
-        target.parentFile.mkdirs()
-        target.outputStream().use { check(compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        target.parentFile!!.mkdirs()
+        target.outputStream().use { check(run {
+            val view = compose.activity.window.decorView
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            compose.runOnUiThread { view.draw(Canvas(bitmap)) }
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }) }
     }
     @Test fun settingsDark() = capture("hermes-settings-dark", "nous")
     @Test fun settingsLight() = capture("hermes-settings-light", "nous-light")
