@@ -105,10 +105,7 @@ jobs:
           name: Hermes Mobile ${{ env.APP_VERSION }}
           files: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
           body: |
-            فارسی: تنظیمات دسته‌بندی‌شده با جست‌وجو و آیکون، منوی گروه‌بندی‌شده، دکمه‌های انگلیسی Copy و Retry و فضای کدنویسی پروژه.
-            English: Searchable settings hub, grouped navigation, English Copy/Retry, and a project coding workspace.
-            Generated file cards: Download to Downloads/Hermes, Open and Share; plain web links are clickable and code blocks have Copy code.
-            Bundled read-only Hermes Code MCP: project overview, source search and Git changes in /root/projects. Four new coding skills included.
-            Context7 and official GitHub read-only MCP presets are disabled until configured. External credentials/internet required; live external integration is not verified.
-            Existing voice, Nous account login, Bot Mode, encrypted Environment and local 9Router remain included.
-            ARM64 only. OpenCode Free inference restriction remains unresolved. Physical Android UI testing is not verified.
+            فارسی: بازیابی مستقل پس از کرش بدون حذف چت‌ها و تنظیمات؛ ورود امن با توقف اجرای خودکار افزونه‌ها، روتر و سرویس پس‌زمینه. منوی اصلی خلوت‌تر و ابزارها در تنظیمات دسته‌بندی شدند. رفع کرش آمار مصرف هنگام وجود داده خراب.
+            English: Independent crash recovery preserves chats and settings. Safe startup skips automatic integrations, router and background service. Simplified drawer; tools remain available in Settings. Malformed usage rows no longer crash statistics.
+            Install over the previous version to preserve data. ARM64 only.
+            Includes automated Android screen/recovery tests. The reported phone's exact crash stack and physical-device behavior are not verified.
