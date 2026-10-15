@@ -26,6 +26,9 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Test bundled coding MCP
+        run: python3 -m unittest discover -s scripts/tests -v
+
       - name: Fetch sandbox payload (PRoot + Alpine rootfs)
         run: |
           pip install --quiet patchelf
@@ -102,8 +105,9 @@ jobs:
           name: Hermes Mobile ${{ env.APP_VERSION }}
           files: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
           body: |
-            فارسی: نمایش فارسی و متن ترکیبی در چت، بخش Environment با ذخیرهٔ رمزگذاری‌شده و مقدارهای پنهان، کپی پیام و تلاش مجدد آخرین نوبت ناموفق با حفظ پیوست‌ها.
-            English: Content-based Persian/English paragraph direction, encrypted Environment editor with masked values, copy user messages, and retry the latest failed turn with its attachments.
-            Existing voice pause/resume, Nous account login, Bot Mode, and bundled local 9Router remain included.
-            OpenCode Free inference is not verified. A provider that fails all probes is no longer automatically selected.
-            ARM64 only. Online models and speech recognition require internet.
+            فارسی: تنظیمات دسته‌بندی‌شده با جست‌وجو و آیکون، منوی گروه‌بندی‌شده، دکمه‌های انگلیسی Copy و Retry و فضای کدنویسی پروژه.
+            English: Searchable settings hub, grouped navigation, English Copy/Retry, and a project coding workspace.
+            Bundled read-only Hermes Code MCP: project overview, source search and Git changes in /root/projects. Four new coding skills included.
+            Context7 and official GitHub read-only MCP presets are disabled until configured. External credentials/internet required; live external integration is not verified.
+            Existing voice, Nous account login, Bot Mode, encrypted Environment and local 9Router remain included.
+            ARM64 only. OpenCode Free inference restriction remains unresolved. Physical Android UI testing is not verified.

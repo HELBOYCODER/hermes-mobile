@@ -172,7 +172,9 @@ class McpManager(private val rt: HermesRuntime) {
     private suspend fun open(server: McpServer): McpConnection {
         val bearer = AtomicReference<String?>(null)
         if (server.url != null) bearer.set(oauth.accessToken(server))
-        val headers = { buildMap<String, String> { putAll(server.headers); bearer.get()?.let { put("Authorization", "Bearer $it") } } }
+        val headers = { buildMap<String, String> { val variables = rt.settings.envVars().toMutableMap()
+            if (!variables.containsKey("GITHUB_TOKEN") && rt.settings.githubToken.isNotBlank()) variables["GITHUB_TOKEN"] = rt.settings.githubToken
+            server.headers.forEach { (name, value) -> put(name, McpEnvironment.resolve(value, variables)) }; bearer.get()?.let { put("Authorization", "Bearer $it") } } }
         if (server.isStdio) return handshake(server, startStdio(server), bearer)
         val url = server.url!!
         suspend fun viaSse(): McpConnection = handshake(server, SseTransport(rt.http, url, headers).also { it.open() }, bearer)
@@ -192,7 +194,7 @@ class McpManager(private val rt: HermesRuntime) {
             val init = transport.request("initialize", JSONObject()
                 .put("protocolVersion", MCP_PROTOCOL_VERSION)
                 .put("capabilities", JSONObject())
-                .put("clientInfo", JSONObject().put("name", "hermes-agent-android").put("version", "2.1")),
+                .put("clientInfo", JSONObject().put("name", "hermes-agent-android").put("version", com.ersaz.hermesmobile.HermesRuntime.VERSION)),
                 timeoutMs = if (server.isStdio) 90_000 else 30_000)
             (transport as? StreamableHttpTransport)?.protocolVersion = init.optString("protocolVersion", MCP_PROTOCOL_VERSION)
             transport.notify("notifications/initialized")

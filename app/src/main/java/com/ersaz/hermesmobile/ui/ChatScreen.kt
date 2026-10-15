@@ -421,8 +421,8 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
                         style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                 }
                 Row {
-                    TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }) { Text("کپی · Copy", fontSize = 12.sp) }
-                    if (item.failure != null) TextButton(enabled = vm.canRetry(item), onClick = { vm.retryFailed(item) }) { Text("تلاش مجدد · Retry", fontSize = 12.sp) }
+                    TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }) { Text("Copy", fontSize = 12.sp) }
+                    if (item.failure != null) TextButton(enabled = vm.canRetry(item), onClick = { vm.retryFailed(item) }) { Text("Retry", fontSize = 12.sp) }
                 }
             }
         }

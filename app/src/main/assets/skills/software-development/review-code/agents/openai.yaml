@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Code"
+  short_description: "Review current diffs for concrete behavioral defects"
+  default_prompt: "Use $review-code to work on the selected project."

@@ -64,7 +64,7 @@ import com.ersaz.hermesmobile.ui.theme.Skins
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(rt: HermesRuntime) {
+fun SettingsScreen(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
     val skin = LocalSkin.current
     val s = rt.settings
     val scope = rememberCoroutineScope()
@@ -79,9 +79,20 @@ fun SettingsScreen(rt: HermesRuntime) {
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm++ }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { perm++; refresh++ }
 
+    var selected by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    val category = SettingsCategory.entries.firstOrNull { it.name == selected }
+    BackHandler(category != null) { selected = null }
+    if (category == null) {
+        SettingsHub(onSelect = { selected = it.name }, onNavigate = onNavigate)
+        return
+    }
+    androidx.compose.runtime.key(category) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-        EnvironmentSettings(s)
+        SettingsDetailHeader(category) { selected = null }
+        if (category == SettingsCategory.Environment) { EnvironmentSettings(s) }
 
+
+        if (category == SettingsCategory.Access) {
         SectionTitle("Full access")
         Hint("Hermes works best with nothing in its way. Grant these once and it can read and write your files, run any command, " +
             "use the mic and keep working in the background.")
@@ -115,6 +126,9 @@ fun SettingsScreen(rt: HermesRuntime) {
             }
         }
 
+        }
+
+        if (category == SettingsCategory.GitHub) {
         SectionTitle("GitHub")
         Hint("Paste a personal access token (github.com → Settings → Developer settings → Tokens; scopes: repo, workflow, gist, read:org). " +
             "It stays on this phone. Once connected, git in the terminal is already signed in (clone, commit, push) and the agent can use the GitHub API, " +
@@ -150,6 +164,9 @@ fun SettingsScreen(rt: HermesRuntime) {
         if (ghMsg.isNotBlank()) Text(ghMsg, color = if (ghMsg.startsWith("Failed")) skin.error else skin.label, fontSize = 12.5.sp,
             modifier = Modifier.padding(top = 6.dp))
 
+        }
+
+        if (category == SettingsCategory.Router) {
         SectionTitle("9Router — free AI router")
         Hint("Runs 9Router inside Hermes' Linux sandbox so every app on this phone can use one OpenAI-compatible endpoint " +
             "(${s.routerHost}:${s.routerPort}) while Hermes is open. Its server and runtime are bundled; connect it to select 9Router and fetch free models.")
@@ -203,6 +220,9 @@ fun SettingsScreen(rt: HermesRuntime) {
         if (rLog.isNotBlank()) Text(rLog.takeLast(1200), color = skin.dim, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp).background(skin.surface, androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).padding(8.dp))
 
+        }
+
+        if (category == SettingsCategory.Access) {
         SectionTitle("Phone control (Shizuku)")
         Hint("Lets the agent operate the phone like a person: open apps, tap, swipe, type, take screenshots and install APKs. " +
             "Install Shizuku, start it once (wireless debugging), then grant Hermes permission here.")
@@ -222,6 +242,9 @@ fun SettingsScreen(rt: HermesRuntime) {
             }
         }
 
+        }
+
+        if (category == SettingsCategory.Models) {
         SectionTitle("🤖 Model provider")
         Hint("Any OpenAI-compatible endpoint works. Sign in to Nous Portal (free models included) or paste an API key for OpenRouter, OpenAI and others; local servers (Ollama, LM Studio) on your LAN work too.")
         Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
@@ -254,6 +277,9 @@ fun SettingsScreen(rt: HermesRuntime) {
         Picker("Reasoning effort", listOf("" to "default", "none" to "none", "low" to "low", "medium" to "medium", "high" to "high"), s.reasoningEffort) { s.reasoningEffort = it; refresh++ }
         Toggle("Show reasoning", s.showReasoning) { s.showReasoning = it; refresh++ }
 
+        }
+
+        if (category == SettingsCategory.Personality) {
         SectionTitle("🎭 Personality & skin")
         Picker("Personality", listOf("" to "none") + Personalities.BUILTIN.keys.map { it to it }, s.personality) { s.personality = it; refresh++ }
         Picker("Skin", Skins.all.map { it.name to "${it.name} — ${it.description}" }, s.skin) { s.skin = it; refresh++ }
@@ -261,6 +287,9 @@ fun SettingsScreen(rt: HermesRuntime) {
         Picker("Tool progress", listOf("off" to "off", "new" to "new", "all" to "all", "verbose" to "verbose"), s.toolProgress) { s.toolProgress = it; refresh++ }
         Toggle("Status bar", s.showStatusBar) { s.showStatusBar = it; refresh++ }
 
+        }
+
+        if (category == SettingsCategory.Tools) {
         SectionTitle("🧰 Toolsets")
         val disabled = s.disabledToolsetSet()
         rt.tools.toolsets.forEach { t ->
@@ -272,6 +301,9 @@ fun SettingsScreen(rt: HermesRuntime) {
         if (s.webSearchBackend == "tavily") Field("Tavily API key", s.tavilyKey, secret = true) { s.tavilyKey = it.trim() }
         if (s.webSearchBackend == "brave") Field("Brave API key", s.braveKey, secret = true) { s.braveKey = it.trim() }
 
+        }
+
+        if (category == SettingsCategory.Sandbox) {
         SectionTitle("💻 Sandbox")
         Toggle("Bind phone storage at /sdcard", s.bindSharedStorage, "Needs 'All files access' permission") { on ->
             s.bindSharedStorage = on
@@ -289,11 +321,17 @@ fun SettingsScreen(rt: HermesRuntime) {
         if (mirrorMsg.isNotBlank()) Text(mirrorMsg, color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         Text("Rootfs: ${rt.sandbox.rootfs.absolutePath}", color = skin.dim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
 
+        }
+
+        if (category == SettingsCategory.Input) {
         SectionTitle("🎨 Appearance & input")
         Picker("Text size", listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Extra large"), s.fontScale) { s.fontScale = it; refresh++ }
         Picker("When I send while Hermes is working", listOf("interrupt" to "Interrupt and answer me now", "queue" to "Queue it for after the current task"), s.busyMode) { s.busyMode = it; refresh++ }
         Field("Voice input language (BCP-47, e.g. fa-IR, en-US; blank = device)", s.voiceLang) { s.voiceLang = it.trim() }
 
+        }
+
+        if (category == SettingsCategory.Backup) {
         SectionTitle("💾 Backup & restore")
         Hint("Saves sessions, memory, skills, bots, MCP servers, schedules and settings to one .zip file. API keys and sign-in tokens are left out unless you include them.")
         var includeSecrets by remember { mutableStateOf(false) }
@@ -315,10 +353,16 @@ fun SettingsScreen(rt: HermesRuntime) {
         }
         if (backupMsg.isNotBlank()) Text(backupMsg, color = skin.dim, fontSize = 12.sp)
 
+        }
+
+        if (category == SettingsCategory.Remote) {
         SectionTitle("🌐 Remote Hermes WebUI")
         Hint("Optional: the original WebView mode for a self-hosted Hermes WebUI (LAN, Tailscale, or public URL).")
         Field("WebUI URL", s.webUiUrl.ifBlank { BuildConfig.HERMES_URL }) { s.webUiUrl = it.trim() }
 
+        }
+
+        if (category == SettingsCategory.About) {
         var updateMsg by remember { mutableStateOf("") }
         OutlinedButton(onClick = { updateMsg = "Checking…"; scope.launch { updateMsg = checkForUpdate(rt) } }) { Text("Check for updates") }
         if (updateMsg.isNotBlank()) Text(updateMsg, color = skin.dim, fontSize = 12.sp)
@@ -326,6 +370,8 @@ fun SettingsScreen(rt: HermesRuntime) {
         Text("Hermes Agent for Android ${HermesRuntime.VERSION}\nPort of NousResearch/hermes-agent (MIT). Sandbox: Alpine Linux + PRoot.",
             color = skin.dim, fontSize = 11.sp)
         Spacer(Modifier.height(40.dp))
+        }
+    }
     }
 }
 

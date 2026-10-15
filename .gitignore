@@ -15,3 +15,7 @@ captures/
 # Sandbox payload — fetched by scripts/fetch_sandbox.sh (build artifacts, not committed)
 app/src/main/jniLibs/
 app/src/main/assets/sandbox/
+
+# Python tools and MCP tests
+__pycache__/
+*.pyc

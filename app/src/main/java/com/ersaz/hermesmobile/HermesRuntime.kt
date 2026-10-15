@@ -86,6 +86,8 @@ class HermesRuntime(val app: Application) {
             if (!soul.exists()) soul.writeText(com.ersaz.hermesmobile.agent.PromptBuilder.DEFAULT_IDENTITY + "\n")
             if (sandbox.payloadAvailable()) sandbox.ensureInstalled()
             runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
+            runCatching { com.ersaz.hermesmobile.coding.CodingPack.install(this@HermesRuntime) }
+                .onFailure { log.e("coding", "Coding tools setup failed: ${it.message}") }
             bridge.start()
             router.autoStartIfNeeded()
         }

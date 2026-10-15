@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.AutoStories
@@ -96,6 +98,7 @@ import kotlinx.coroutines.launch
 enum class Dest(val title: String, val icon: ImageVector) {
     Chat("Chat", Icons.AutoMirrored.Filled.Chat),
     Bots("Bot mode", Icons.Default.SmartToy),
+    Coding("Coding workspace", Icons.Default.Code),
     Terminal("Terminal", Icons.Default.Terminal),
     Sessions("Sessions", Icons.Default.History),
     Skills("Skills", Icons.Default.AutoStories),
@@ -140,6 +143,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale * fs),
             ) { HermesTheme(skin) {
                 var dest by rememberSaveable { mutableStateOf(Dest.Chat) }
+                BackHandler(dest != Dest.Chat) { dest = Dest.Chat }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
                 // The agent asked for the browser on screen (login / CAPTCHA hand-over).
@@ -176,12 +180,22 @@ class MainActivity : ComponentActivity() {
                                     shape = RoundedCornerShape(14.dp),
                                 )
                                 Spacer(Modifier.height(10.dp))
-                                Dest.entries.forEach { d ->
-                                    NavigationDrawerItem(
-                                        label = { Text(d.title) }, icon = { Icon(d.icon, null) }, selected = d == dest,
-                                        onClick = { dest = d; scope.launch { drawer.close() } },
-                                        colors = navColors, shape = RoundedCornerShape(12.dp),
-                                    )
+                                val groups = linkedMapOf(
+                                    "Conversations" to listOf(Dest.Chat, Dest.Sessions, Dest.Bots, Dest.Memory),
+                                    "Development" to listOf(Dest.Coding, Dest.Terminal, Dest.Files, Dest.Browser, Dest.Skills, Dest.Mcp, Dest.SubAgents),
+                                    "Automation & connections" to listOf(Dest.Cron, Dest.Gateway, Dest.WebUi),
+                                    "App" to listOf(Dest.Settings, Dest.Usage, Dest.Logs),
+                                )
+                                groups.forEach { (label, destinations) ->
+                                    Text(label, color = skin.dim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 6.dp))
+                                    destinations.forEach { d ->
+                                        NavigationDrawerItem(
+                                            label = { Text(d.title) }, icon = { Icon(d.icon, null) }, selected = d == dest,
+                                            onClick = { dest = d; scope.launch { drawer.close() } },
+                                            colors = navColors, shape = RoundedCornerShape(12.dp),
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.height(24.dp))
                             }
@@ -224,7 +238,8 @@ class MainActivity : ComponentActivity() {
                                 Dest.Files -> FilesScreen(rt)
                                 Dest.Usage -> UsageScreen(rt)
                                 Dest.Logs -> LogsScreen(rt)
-                                Dest.Settings -> SettingsScreen(rt)
+                                Dest.Coding -> com.ersaz.hermesmobile.ui.CodingScreen(rt, vm, onChat = { dest = Dest.Chat }, onNavigate = { route -> Dest.entries.firstOrNull { it.name == route }?.let { dest = it } })
+                                Dest.Settings -> SettingsScreen(rt) { route -> Dest.entries.firstOrNull { it.name == route }?.let { dest = it } }
                             }
                         }
                     }
