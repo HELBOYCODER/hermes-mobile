@@ -7,7 +7,7 @@ import java.security.MessageDigest
 class GeneratedFiles(private val root: File, val directory: File) {
     @Synchronized fun capture(source: File): File {
         val file = source.canonicalFile
-        require(file.toPath().startsWith(root.canonicalFile.toPath()) && file.isFile) { "Choose an existing file inside the Linux sandbox" }
+        require(file.path.startsWith(root.canonicalPath + File.separator) && file.isFile) { "Choose an existing file inside the Linux sandbox" }
         require(file.length() <= 512L * 1024 * 1024) { "File exceeds the 512 MB attachment limit" }
         directory.mkdirs()
         val temporary = File.createTempFile("delivery-", ".tmp", directory)
@@ -32,7 +32,7 @@ class GeneratedFiles(private val root: File, val directory: File) {
         } finally { temporary.delete() }
     }
 
-    fun isDelivered(file: File): Boolean = file.isFile && file.canonicalFile.toPath().startsWith(directory.canonicalFile.toPath())
+    fun isDelivered(file: File): Boolean = file.isFile && file.canonicalPath.startsWith(directory.canonicalPath + File.separator)
 
     companion object {
         fun safeName(name: String): String {

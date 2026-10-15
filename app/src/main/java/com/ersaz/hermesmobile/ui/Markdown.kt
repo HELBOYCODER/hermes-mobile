@@ -101,9 +101,9 @@ private fun MarkdownImage(alt: String, src: String) {
     )
 }
 
-private val imageCache = object : android.util.LruCache<String, android.graphics.Bitmap>(24 * 1024 * 1024) {
+private val imageCache by lazy { object : android.util.LruCache<String, android.graphics.Bitmap>(24 * 1024 * 1024) {
     override fun sizeOf(key: String, value: android.graphics.Bitmap) = value.byteCount
-}
+} }
 
 private fun loadMarkdownImage(ctx: android.content.Context, src: String): android.graphics.Bitmap? {
     imageCache.get(src)?.let { return it }
@@ -137,12 +137,19 @@ private fun loadMarkdownImage(ctx: android.content.Context, src: String): androi
 private fun MarkdownTable(rows: List<List<String>>) {
     val skin = LocalSkin.current
     val cols = rows.maxOf { it.size }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
         for (c in 0 until cols) {
             Column(Modifier.background(if (c % 2 == 0) skin.surface else skin.surface.copy(alpha = 0.55f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
                 rows.forEachIndexed { r, row ->
-                    Text(inline(row.getOrElse(c) { "" }, skin.accent, skin.label, skin.surface), style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), color = if (r == 0) skin.title else skin.text,
-                        fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, fontSize = 13.5.sp, modifier = Modifier.padding(vertical = 3.dp))
+                    val annotated = inline(row.getOrElse(c) { "" }, skin.accent, skin.label, skin.surface)
+                    androidx.compose.foundation.text.ClickableText(annotated,
+                        style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start,
+                            color = if (r == 0) skin.title else skin.text, fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, fontSize = 13.5.sp),
+                        modifier = Modifier.padding(vertical = 3.dp), onClick = { offset ->
+                            annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { link -> openChatLink(context, link.item) { uri.openUri(it) } }
+                        })
                 }
             }
         }
@@ -260,7 +267,7 @@ private fun openChatLink(context: android.content.Context, target: String, openW
             val guest = WebLinks.localTarget(target) ?: error("Unsupported or invalid link")
             val rt = com.ersaz.hermesmobile.HermesRuntime.get(context)
             val file = rt.sandbox.hostPath(android.net.Uri.decode(guest)).canonicalFile
-            require(file.isFile && file.toPath().startsWith(rt.sandbox.rootfs.canonicalFile.toPath())) { "File is not available" }
+            require(file.isFile && file.path.startsWith(rt.sandbox.rootfs.canonicalPath + java.io.File.separator)) { "File is not available" }
             val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
             context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri,
                 com.ersaz.hermesmobile.files.DownloadsExporter.mime(file))
