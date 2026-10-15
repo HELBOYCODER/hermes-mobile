@@ -125,6 +125,20 @@ class Agent(
             val client = runtime.llmClient().also { llm = it }
             runtime.mcp.awaitReady() // MCP servers may still be connecting right after launch
             val toolList = tools()
+            if (retryMessageId == null && com.ersaz.hermesmobile.agent.tools.AnalyzeLinkTool.isBareMediaLink(userText.trim())) {
+                toolList.firstOrNull { it.name == "analyze_link" }?.let { media ->
+                    val call = ToolCall(java.util.UUID.randomUUID().toString(), media.name, org.json.JSONObject().put("url", userText.trim()).toString())
+                    session.messages += Message("assistant", toolCalls = listOf(call))
+                    listener.onToolStart(call)
+                    val started = System.currentTimeMillis()
+                    val evidence = try { media.run(org.json.JSONObject(call.arguments), ToolContext(runtime, this, listener)) }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { "{\"error\":\"Media extraction unavailable\",\"coverage\":\"none\"}" }
+                    session.messages += Message("tool", evidence, toolCallId = call.id, name = call.name)
+                    listener.onToolEnd(call, evidence, System.currentTimeMillis() - started)
+                    runtime.sessions.save(session)
+                }
+            }
             val toolSchemas = runtime.tools.schemas(toolList)
             var finalText = ""
             var iteration = 0

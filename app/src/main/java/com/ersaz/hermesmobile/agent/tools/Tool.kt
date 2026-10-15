@@ -80,7 +80,7 @@ class ToolRegistry(private val runtime: HermesRuntime) {
         listOf(
             TerminalTool(), ProcessTool(),
             ReadFileTool(), WriteFileTool(), PatchTool(), SearchFilesTool(), SendFileTool(), CodingWorkflowTool(),
-            WebSearchTool(), WebExtractTool(),
+            WebSearchTool(), WebExtractTool(), AnalyzeLinkTool(),
             MemoryTool(),
             SkillsListTool(), SkillViewTool(), SkillManageTool(),
             TodoTool(),
