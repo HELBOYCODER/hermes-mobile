@@ -163,6 +163,17 @@ class Sandbox(private val context: Context, private val settings: Settings) {
         File(rootfs, "etc/profile.d/hermes.sh").writeText(PROFILE)
         File(rootfs, "etc/motd").writeText(MOTD)
         File(rootfs, "usr/local/bin").mkdirs()
+        // Official OpenCode CLI: install and authenticate interactively inside the existing terminal.
+        // No paid model entitlement is granted by this launcher.
+        val cliScript = File(rootfs, "root/.hermes/coding/hermes-opencode.sh")
+        cliScript.parentFile?.mkdirs()
+        context.assets.open("coding/hermes-opencode.sh").use { input ->
+            cliScript.outputStream().use { output -> input.copyTo(output) }
+        }
+        File(rootfs, "usr/local/bin/hermes-opencode").apply {
+            writeText("#!/bin/sh\nexec /bin/sh /root/.hermes/coding/hermes-opencode.sh \"\$@\"\n")
+            runCatching { Os.chmod(absolutePath, "755".toInt(8)) }
+        }
         File(rootfs, "usr/local/bin/hermes").apply {
             writeText(HERMES_CLI)
             runCatching { Os.chmod(absolutePath, "755".toInt(8)) }
