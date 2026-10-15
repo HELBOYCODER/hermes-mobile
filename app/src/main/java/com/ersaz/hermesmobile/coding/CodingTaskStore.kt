@@ -8,7 +8,10 @@ import org.json.JSONObject
 class CodingTaskStore(root: File, private val storage: File = File(root, ".specify/hermes-state.json")) {
     fun read(): JSONObject = synchronized(lock) {
         if (!storage.exists()) JSONObject().put("tasks", JSONArray()).put("runs", JSONObject())
-        else JSONObject(storage.readText())
+        else {
+            require(storage.length() <= 4_194_304) { "Evidence file exceeds the safe read limit; archive it from Files before continuing" }
+            JSONObject(storage.readText())
+        }
     }
     fun update(id: String, text: String, status: String, runId: String? = null) = synchronized(lock) {
         require(Regex("[A-Za-z0-9_-]{1,64}").matches(id))
@@ -29,7 +32,7 @@ class CodingTaskStore(root: File, private val storage: File = File(root, ".speci
         val root = read(); val runs = root.getJSONObject("runs")
         while (runs.length() >= 100) runs.keys().asSequence().firstOrNull()?.let { runs.remove(it) }
         runs.put(id, JSONObject().put("status", status).put("exit_code", exitCode ?: JSONObject.NULL)
-            .put("command", command.take(4000)).put("output", output.take(1_048_576)).put("at", System.currentTimeMillis()))
+            .put("command", command.take(4000)).put("output", output.take(16000)).put("at", System.currentTimeMillis()))
         save(root)
     }
     private fun save(root: JSONObject) {

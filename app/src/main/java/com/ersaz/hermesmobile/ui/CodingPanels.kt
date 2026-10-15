@@ -29,7 +29,23 @@ fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit) {
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val root = projectRoot(rt)
-                checkpointStore(rt, root).list() to projectTaskStore(rt, root).read().toString(2)
+                val evidence = projectTaskStore(rt, root).read()
+                val taskList = evidence.getJSONArray("tasks")
+                val runList = evidence.getJSONObject("runs")
+                val summary = buildString {
+                    for (i in 0 until taskList.length()) {
+                        val task = taskList.getJSONObject(i)
+                        appendLine("${task.optString("status").uppercase()} · ${task.optString("text").take(300)}")
+                    }
+                    if (runList.length() > 0) appendLine("\nRecent test evidence")
+                    runList.keys().asSequence().map { it to runList.getJSONObject(it) }
+                        .sortedByDescending { it.second.optLong("at") }.take(10).forEach { (id, run) ->
+                            appendLine("${run.optString("status")} · exit ${run.opt("exit_code")} · ${id.take(8)}")
+                            appendLine(run.optString("command").take(200))
+                            appendLine(run.optString("output").take(500))
+                        }
+                }
+                checkpointStore(rt, root).list() to summary
             } }.onSuccess { checkpoints = it.first; tasks = it.second }.onFailure { message = it.message ?: "Select a project first" }
         }
     }
