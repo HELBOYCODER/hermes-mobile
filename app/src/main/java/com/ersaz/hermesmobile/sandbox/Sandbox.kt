@@ -274,8 +274,8 @@ class Sandbox(private val context: Context, private val settings: Settings) {
                 }
             } catch (_: Exception) {}
         }.apply { isDaemon = true; start() }
-        val finished = proc.waitFor(timeoutSec.toLong(), TimeUnit.SECONDS)
-        if (!finished) proc.destroyForcibly()
+        val finished = try { waitForCommand(proc, timeoutSec.toLong()) }
+        catch (e: kotlinx.coroutines.CancellationException) { script.delete(); throw e }
         reader.join(2000)
         script.delete()
         var out = synchronized(buf) { buf.toString() }
