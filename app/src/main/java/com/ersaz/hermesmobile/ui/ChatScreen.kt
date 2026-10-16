@@ -238,8 +238,8 @@ private fun BrowserMiniPreview(rt: com.ersaz.hermesmobile.HermesRuntime, onOpenB
     val requests by browser.showRequests.collectAsState()
     var frameNumber by remember { mutableIntStateOf(0) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    LaunchedEffect(handover) {
+        while (handover != null) {
             delay(2700)
             frameNumber++
         }
@@ -285,8 +285,8 @@ private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
     val skin = LocalSkin.current
     val rt = vm.runtime
     var refresh by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    LaunchedEffect(vm.busy) {
+        while (vm.busy) {
             delay(2300)
             refresh++
         }
@@ -295,7 +295,6 @@ private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
     val activeTool = vm.items.lastOrNull {
         it is ChatItem.Tool && it.result == null && it.name in setOf("terminal", "coding_workflow")
     } as? ChatItem.Tool
-    val hasShells = TerminalTabs.sessions.isNotEmpty()
     if (running != null || activeTool != null) {
         val output = running?.let { rt.processes.log(it.id, 5).orEmpty() }.orEmpty()
         // Terminal output is shown only to the owner in this UI, not added to LLM messages.
