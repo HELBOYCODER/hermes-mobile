@@ -22,6 +22,23 @@ class OpenCodeCatalogTest {
             OpenCodeCatalog.freeChatIds(payload))
     }
 
+
+    @Test fun opencodeV2FeaturedFreeModelsAreRecognized() {
+        val catalog = """
+            {"object":"list","data":[
+              {"id":"glm-5.3-flash-free"},
+              {"id":"nemotron-3.5-super-vl-free"},
+              {"id":"deepseek-v4.1-flash-free"},
+              {"id":"glm-5.3-flash"},
+              {"id":"deepseek-v4.1-flash"}
+            ]}
+        """.trimIndent()
+        assertEquals(
+            listOf("deepseek-v4.1-flash-free", "glm-5.3-flash-free", "nemotron-3.5-super-vl-free"),
+            OpenCodeCatalog.freeChatIds(catalog)
+        )
+    }
+
     @Test fun handlesEmptyCatalog() {
         assertEquals(emptyList<String>(), OpenCodeCatalog.freeChatIds("""{"data":[]}"""))
         assertEquals(emptyList<String>(), OpenCodeCatalog.freeChatIds("""{}"""))
