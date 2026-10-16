@@ -46,6 +46,11 @@ import com.ersaz.hermesmobile.llm.ModelInfo
 import com.ersaz.hermesmobile.llm.Providers
 import com.ersaz.hermesmobile.ui.theme.LocalSkin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+import org.json.JSONObject
+import com.ersaz.hermesmobile.core.OpenCodeCatalog
 
 /** Bottom sheet in chat: every provider/model that was added, pick one to switch, add or fetch more. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,9 +144,18 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
         }
     }
 
-    if (connectingZen) OpenCodeZenDialog(rt, onDismiss = { connectingZen = false }) { p ->
-        store.upsert(p); store.select(p); vm.modelChanged(); connectingZen = false; onDismiss()
-    }
+    if (connectingZen) OpenCodeZenDialog(
+        rt = rt,
+        onDismiss = { connectingZen = false },
+        onAdd = { p ->
+            store.upsert(p); store.select(p); vm.modelChanged(); connectingZen = false; onDismiss()
+        },
+        onFreeModelsLoaded = { count ->
+            rev++
+            connectingZen = false
+            msg = "Listed $count free-tier OpenCode models. Select a model and tap Test to verify your key; catalog listing alone does not confirm access."
+        },
+    )
     if (adding) AddModelDialog(onDismiss = { adding = false }) { p -> store.upsert(p); store.select(p); vm.modelChanged(); adding = false; onDismiss() }
 }
 
@@ -236,29 +250,73 @@ fun HermesRuntime.useModel(m: ModelInfo) {
     if (m.contextLength > 0) settings.contextLength = m.contextLength.coerceAtMost(200_000)
 }
 
-/** Zen supports official API keys; website login does not provide a third-party OAuth callback. */
+/**
+ * Official OpenCode Console API integration. Account login in a browser does not issue
+ * an OAuth token for third-party Android apps; the user supplies their Console API key.
+ * Catalog lookup is public, but actual inference must be tested before claiming access.
+ */
 @Composable
-private fun OpenCodeZenDialog(rt: HermesRuntime, onDismiss: () -> Unit, onAdd: (ModelProfile) -> Unit) {
+private fun OpenCodeZenDialog(
+    rt: HermesRuntime,
+    onDismiss: () -> Unit,
+    onAdd: (ModelProfile) -> Unit,
+    onFreeModelsLoaded: (Int) -> Unit,
+) {
     var key by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Connect OpenCode Zen API") },
+        title = { Text("Connect OpenCode Console") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("OpenCode Zen requires an API key from your account. Website sign-in alone does not authorize Hermes. Some models are paid or use a different API endpoint.")
+                Text("Sign in to OpenCode Console, create an API key, and paste it here. The free-tier catalog does not guarantee your account can run a model.")
                 TextButton(onClick = {
-                    com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.open(rt.app, "https://opencode.ai/zen")
-                }) { Text("Open official OpenCode Zen website") }
-                Field("Zen API key", key, secret = true) { key = it.trim() }
+                    com.ersaz.hermesmobile.auth.BrowserAuthCoordinator.open(rt.app, "https://opencode.ai/console")
+                }) { Text("Open official OpenCode Console") }
+                Field("Console API key", key, secret = true) { key = it.trim() }
+                TextButton(enabled = !busy && key.isNotBlank(), onClick = {
+                    busy = true
+                    message = "Loading official free models..."
+                    scope.launch {
+                        try {
+                            val response = withContext(Dispatchers.IO) {
+                                val request = Request.Builder().url(OpenCodeCatalog.MODELS_URL).get().build()
+                                rt.http.newCall(request).execute().use { r ->
+                                    if (!r.isSuccessful) throw IllegalStateException("Catalog HTTP " + r.code)
+                                    r.body?.string() ?: throw IllegalStateException("Empty model catalog")
+                                }
+                            }
+                            val ids = OpenCodeCatalog.freeChatIds(response)
+                            if (ids.isEmpty()) {
+                                message = "The official catalog returned no supported free chat models."
+                            } else {
+                                rt.modelStore.replaceSource("opencode-catalog", ids.map { id ->
+                                    ModelProfile("OpenCode Console · Free", "custom",
+                                        OpenCodeCatalog.CHAT_BASE_URL, key, id, true, "opencode-catalog")
+                                })
+                                onFreeModelsLoaded(ids.size)
+                            }
+                        } catch (e: Exception) {
+                            message = "Cannot load OpenCode models: " + (e.message ?: "connection failed")
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }) { Text(if (busy) "Loading..." else "Fetch supported free models") }
+                Text("Or add one documented chat-completions model manually:")
                 Field("Chat-completions model ID", model) { model = it.trim() }
-                Text("Only chat-completions models are supported here. Models using /responses or other endpoints need separate integration. Free access is not guaranteed.")
+                Text("Other model families use /responses, /messages or Google-specific endpoints and need separate adapters.")
+                if (message.isNotBlank()) Text(message)
             }
         },
         confirmButton = {
-            TextButton(enabled = key.isNotBlank() && model.isNotBlank(), onClick = {
-                onAdd(ModelProfile("OpenCode Zen API", "custom", "https://opencode.ai/zen/v1", key, model, false, "manual"))
-            }) { Text("Save API connection") }
+            TextButton(enabled = !busy && key.isNotBlank() && model.isNotBlank(), onClick = {
+                onAdd(ModelProfile("OpenCode Console API", "custom",
+                    OpenCodeCatalog.CHAT_BASE_URL, key, model, false, "manual"))
+            }) { Text("Save manual model") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
