@@ -278,7 +278,7 @@ class MainActivity : ComponentActivity() {
                     ) { pad ->
                         Column(Modifier.padding(pad).fillMaxSize()) {
                             when (dest) {
-                                Dest.Chat -> ChatScreen(vm, onOpenBrowser = { navigate(Dest.Browser) })
+                                Dest.Chat -> ChatScreen(vm, onOpenBrowser = { navigate(Dest.Browser) }, onOpenTerminal = { navigate(Dest.Terminal) })
                                 Dest.Bots -> BotsScreen(rt, vm) { navigate(Dest.Chat) }
                                 Dest.Terminal -> TerminalScreen(rt)
                                 Dest.Sessions -> SessionsScreen(rt, vm) { navigate(Dest.Chat) }
