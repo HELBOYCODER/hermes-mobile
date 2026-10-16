@@ -98,7 +98,7 @@ import java.io.ByteArrayOutputStream
 private val ContentMaxWidth = 760.dp
 
 @Composable
-fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}) {
+fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal: () -> Unit = {}) {
     val skin = LocalSkin.current
     val listState = rememberLazyListState()
     val context = LocalContext.current
@@ -150,6 +150,7 @@ fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}) {
         }
 
         BrowserMiniPreview(vm.runtime, onOpenBrowser)
+        SandboxMiniPreview(vm, onOpenTerminal)
 
         var showModels by remember { mutableStateOf(false) }
         StatusLine(vm) { showModels = true }
@@ -273,6 +274,58 @@ private fun BrowserMiniPreview(rt: com.ersaz.hermesmobile.HermesRuntime, onOpenB
                     Text(if (handover == null) "Tap to expand" else "Take Over · complete sign-in or CAPTCHA",
                         color = skin.accent, fontSize = 11.sp)
                 }
+            }
+        }
+    }
+}
+
+/** Compact status of real PRoot processes and terminal sessions, never a simulated run. */
+@Composable
+private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
+    val skin = LocalSkin.current
+    val rt = vm.runtime
+    var refresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2300)
+            refresh++
+        }
+    }
+    val running = remember(refresh) { rt.processes.list().lastOrNull { it.isRunning } }
+    val activeTool = vm.items.lastOrNull {
+        it is ChatItem.Tool && it.result == null && it.name in setOf("terminal", "coding_workflow")
+    } as? ChatItem.Tool
+    val hasShells = TerminalTabs.sessions.isNotEmpty()
+    if (running != null || activeTool != null || hasShells) {
+        val output = running?.let { rt.processes.log(it.id, 5).orEmpty() }.orEmpty()
+        // Terminal output is shown only to the owner in this UI, not added to LLM messages.
+        var safe = rt.settings.redactEnvironment(output)
+        (rt.modelStore.all().map { it.apiKey } + rt.settings.apiKey)
+            .filter { it.length >= 8 }.forEach { safe = safe.replace(it, "[REDACTED]") }
+        val lines = safe.lines().takeLast(4).joinToString("\n").take(280)
+        Surface(
+            modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = skin.surface, shadowElevation = 2.dp,
+        ) {
+            Column(Modifier.clickable(onClick = onOpenTerminal).padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sandbox activity", color = skin.title, fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text("Open terminal ›", color = skin.accent, fontSize = 11.sp)
+                }
+                Text(
+                    when {
+                        activeTool != null -> "Agent is executing: ${activeTool.name}"
+                        running != null -> "Running background process ${running.id}"
+                        else -> "${TerminalTabs.sessions.size} terminal session(s)"
+                    },
+                    color = skin.dim, fontSize = 11.sp,
+                )
+                if (lines.isNotBlank()) Text(lines, color = skin.label, fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                Text("Terminal opens a separate shell; it does not take over a running process.",
+                    color = skin.dim, fontSize = 10.sp)
             }
         }
     }
