@@ -166,12 +166,23 @@ class MainActivity : ComponentActivity() {
                 var dest by androidx.compose.runtime.remember { mutableStateOf(Dest.Chat) }
                 var chatFiles by androidx.compose.runtime.remember { mutableStateOf(false) }
                 if (chatFiles) com.ersaz.hermesmobile.ui.ChatFilesDialog(rt, vm) { chatFiles = false }
-                BackHandler(dest != Dest.Chat) { dest = Dest.Chat }
+                // Navigation history reflects the actual path, not a forced return to Chat.
+                val history = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateListOf<Dest>() }
+                fun navigate(next: Dest) {
+                    if (next != dest) {
+                        history.add(dest)
+                        dest = next
+                    }
+                }
+                fun goBack() {
+                    dest = if (history.isNotEmpty()) history.removeAt(history.lastIndex) else Dest.Chat
+                }
+                BackHandler(dest != Dest.Chat) { goBack() }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
                 // The agent asked for the browser on screen (login / CAPTCHA hand-over).
                 val showReq by rt.browser.showRequests.collectAsState()
-                androidx.compose.runtime.LaunchedEffect(showReq) { if (showReq > 0) dest = Dest.Browser }
+                androidx.compose.runtime.LaunchedEffect(showReq) { if (showReq > 0) navigate(Dest.Browser) }
                 val scope = rememberCoroutineScope()
 
                 if (!onboarded) {
@@ -186,6 +197,7 @@ class MainActivity : ComponentActivity() {
                 )
                 ModalNavigationDrawer(
                     drawerState = drawer,
+                    gesturesEnabled = dest != Dest.Browser,
                     drawerContent = {
                         ModalDrawerSheet(drawerContainerColor = skin.bg, drawerContentColor = skin.text) {
                             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
@@ -197,7 +209,7 @@ class MainActivity : ComponentActivity() {
                                 NavigationDrawerItem(
                                     label = { Text("New chat", fontWeight = FontWeight.Medium) },
                                     icon = { Icon(Icons.Default.AddComment, null) }, selected = false,
-                                    onClick = { vm.newSession(); dest = Dest.Chat; scope.launch { drawer.close() } },
+                                    onClick = { vm.newSession(); navigate(Dest.Chat); scope.launch { drawer.close() } },
                                     colors = NavigationDrawerItemDefaults.colors(
                                         unselectedContainerColor = skin.surface, unselectedTextColor = skin.title, unselectedIconColor = skin.accent),
                                     shape = RoundedCornerShape(14.dp),
@@ -229,7 +241,7 @@ class MainActivity : ComponentActivity() {
                         containerColor = skin.bg,
                         contentWindowInsets = WindowInsets.safeDrawing,
                         topBar = {
-                            TopAppBar(
+                            if (dest != Dest.Browser) TopAppBar(
                                 title = {
                                     Text(if (dest == Dest.Chat) (vm.activeBot?.let { "${it.name} · " }.orEmpty() + vm.sessionTitle.ifBlank { skin.agentName }) else dest.title,
                                         color = skin.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
@@ -242,13 +254,13 @@ class MainActivity : ComponentActivity() {
                                             when (action) {
                                                 com.ersaz.hermesmobile.ui.SessionAction.NewChat -> vm.newSession()
                                                 com.ersaz.hermesmobile.ui.SessionAction.ClearChat -> clear = true
-                                                com.ersaz.hermesmobile.ui.SessionAction.Terminal -> dest = Dest.Terminal
-                                                com.ersaz.hermesmobile.ui.SessionAction.Browser -> dest = Dest.Browser
+                                                com.ersaz.hermesmobile.ui.SessionAction.Terminal -> navigate(Dest.Terminal)
+                                                com.ersaz.hermesmobile.ui.SessionAction.Browser -> navigate(Dest.Browser)
                                                 com.ersaz.hermesmobile.ui.SessionAction.Files -> chatFiles = true
-                                                com.ersaz.hermesmobile.ui.SessionAction.Skills -> dest = Dest.Skills
-                                                com.ersaz.hermesmobile.ui.SessionAction.Mcp -> dest = Dest.Mcp
-                                                com.ersaz.hermesmobile.ui.SessionAction.Memory -> dest = Dest.Memory
-                                                com.ersaz.hermesmobile.ui.SessionAction.Usage -> dest = Dest.Usage
+                                                com.ersaz.hermesmobile.ui.SessionAction.Skills -> navigate(Dest.Skills)
+                                                com.ersaz.hermesmobile.ui.SessionAction.Mcp -> navigate(Dest.Mcp)
+                                                com.ersaz.hermesmobile.ui.SessionAction.Memory -> navigate(Dest.Memory)
+                                                com.ersaz.hermesmobile.ui.SessionAction.Usage -> navigate(Dest.Usage)
                                                 com.ersaz.hermesmobile.ui.SessionAction.AutoCompact -> {
                                                     vm.agent.session.autoCompact = !vm.agent.session.autoCompact
                                                     rt.sessions.save(vm.agent.session)
@@ -260,7 +272,7 @@ class MainActivity : ComponentActivity() {
                                             confirmButton = { androidx.compose.material3.TextButton(enabled = !vm.busy, onClick = { clear = false; vm.clearChat() }) { Text("Clear Chat") } },
                                             dismissButton = { androidx.compose.material3.TextButton(onClick = { clear = false }) { Text("Cancel") } })
                                     }
-                                    if (dest != Dest.Terminal) IconButton(onClick = { dest = Dest.Terminal }) { Icon(Icons.Default.Terminal, "terminal", tint = skin.label) }
+                                    if (dest != Dest.Terminal) IconButton(onClick = { navigate(Dest.Terminal) }) { Icon(Icons.Default.Terminal, "terminal", tint = skin.label) }
                                 },
                                 colors = TopAppBarDefaults.topAppBarColors(containerColor = skin.bg, scrolledContainerColor = skin.bg),
                             )
@@ -269,13 +281,13 @@ class MainActivity : ComponentActivity() {
                         Column(Modifier.padding(pad).fillMaxSize()) {
                             when (dest) {
                                 Dest.Chat -> ChatScreen(vm)
-                                Dest.Bots -> BotsScreen(rt, vm) { dest = Dest.Chat }
+                                Dest.Bots -> BotsScreen(rt, vm) { navigate(Dest.Chat) }
                                 Dest.Terminal -> TerminalScreen(rt)
-                                Dest.Sessions -> SessionsScreen(rt, vm) { dest = Dest.Chat }
-                                Dest.Skills -> SkillsScreen(rt, vm) { dest = Dest.Chat }
+                                Dest.Sessions -> SessionsScreen(rt, vm) { navigate(Dest.Chat) }
+                                Dest.Skills -> SkillsScreen(rt, vm) { navigate(Dest.Chat) }
                                 Dest.Memory -> MemoryScreen(rt)
                                 Dest.Cron -> CronScreen(rt)
-                                Dest.Browser -> BrowserScreen(rt)
+                                Dest.Browser -> BrowserScreen(rt, onExit = { goBack() })
                                 Dest.SubAgents -> SubAgentsScreen(rt)
                                 Dest.Mcp -> McpScreen(rt)
                                 Dest.Gateway -> GatewayScreen(rt)
@@ -283,10 +295,10 @@ class MainActivity : ComponentActivity() {
                                 Dest.Files -> FilesScreen(rt)
                                 Dest.Usage -> UsageScreen(rt)
                                 Dest.Logs -> LogsScreen(rt)
-                                Dest.Coding -> com.ersaz.hermesmobile.ui.CodingScreen(rt, vm, onChat = { dest = Dest.Chat }, onNavigate = { route -> Dest.entries.firstOrNull { it.name == route }?.let { dest = it } })
+                                Dest.Coding -> com.ersaz.hermesmobile.ui.CodingScreen(rt, vm, onChat = { navigate(Dest.Chat) }, onNavigate = { route -> Dest.entries.firstOrNull { it.name == route }?.let { navigate(it) } })
                                 Dest.Settings -> SettingsScreen(rt) { route ->
                                     if (route == "Recovery") startActivity(android.content.Intent(this@MainActivity, RecoveryActivity::class.java))
-                                    else Dest.entries.firstOrNull { it.name == route }?.let { dest = it }
+                                    else Dest.entries.firstOrNull { it.name == route }?.let { navigate(it) }
                                 }
                             }
                         }
