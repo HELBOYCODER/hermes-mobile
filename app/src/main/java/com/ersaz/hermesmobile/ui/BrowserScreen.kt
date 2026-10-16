@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 
 /** The agent's browser, on screen: watch it work, or take over to sign in / solve a CAPTCHA. */
 @Composable
-fun BrowserScreen(rt: HermesRuntime) {
+fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
     val skin = LocalSkin.current
     val b = rt.browser
     val scope = rememberCoroutineScope()
@@ -62,10 +62,17 @@ fun BrowserScreen(rt: HermesRuntime) {
     LaunchedEffect(active?.url) { active?.url?.let { urlText = it } }
 
     Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onExit) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Return to previous Hermes screen", tint = skin.label)
+            }
+            Text("Browser · Manual control", modifier = Modifier.weight(1f), color = skin.title)
+            if (handover != null) Button(onClick = { b.finishHandover(); onExit() }) { Text("Done") }
+        }
         handover?.let { msg ->
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🤝 $msg", color = skin.warn, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Button(onClick = { b.finishHandover() }) { Text("Done") }
+                Text("Complete the verification in the page, then tap Done above.", color = skin.label, fontSize = 12.sp)
             }
         }
         LazyRow(Modifier.padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -95,6 +102,7 @@ fun BrowserScreen(rt: HermesRuntime) {
                 update = { frame ->
                     val web = b.viewFor(a)
                     if (web.parent !== frame) {
+                        (web.parent as? ViewGroup)?.removeView(web)
                         frame.removeAllViews()
                         frame.addView(web, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                     }
