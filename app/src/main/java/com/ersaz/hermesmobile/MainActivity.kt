@@ -180,9 +180,7 @@ class MainActivity : ComponentActivity() {
                 BackHandler(dest != Dest.Chat) { goBack() }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
-                // The agent asked for the browser on screen (login / CAPTCHA hand-over).
-                val showReq by rt.browser.showRequests.collectAsState()
-                androidx.compose.runtime.LaunchedEffect(showReq) { if (showReq > 0) navigate(Dest.Browser) }
+                // Browser handovers appear as an inline live preview in chat. Never steal the screen mid-gesture.
                 val scope = rememberCoroutineScope()
 
                 if (!onboarded) {
@@ -226,7 +224,7 @@ class MainActivity : ComponentActivity() {
                                     destinations.forEach { d ->
                                         NavigationDrawerItem(
                                             label = { Text(d.title) }, icon = { Icon(d.icon, null) }, selected = d == dest,
-                                            onClick = { dest = d; scope.launch { drawer.close() } },
+                                            onClick = { navigate(d); scope.launch { drawer.close() } },
                                             colors = navColors, shape = RoundedCornerShape(12.dp),
                                         )
                                     }
@@ -280,7 +278,7 @@ class MainActivity : ComponentActivity() {
                     ) { pad ->
                         Column(Modifier.padding(pad).fillMaxSize()) {
                             when (dest) {
-                                Dest.Chat -> ChatScreen(vm)
+                                Dest.Chat -> ChatScreen(vm, onOpenBrowser = { navigate(Dest.Browser) })
                                 Dest.Bots -> BotsScreen(rt, vm) { navigate(Dest.Chat) }
                                 Dest.Terminal -> TerminalScreen(rt)
                                 Dest.Sessions -> SessionsScreen(rt, vm) { navigate(Dest.Chat) }
