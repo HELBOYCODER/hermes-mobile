@@ -177,11 +177,13 @@ class MainActivity : ComponentActivity() {
                 fun goBack() {
                     dest = if (history.isNotEmpty()) history.removeAt(history.lastIndex) else Dest.Chat
                 }
-                BackHandler(dest != Dest.Chat) { goBack() }
                 var onboarded by rememberSaveable { mutableStateOf(rt.settings.onboarded || rt.settings.apiKey.isNotBlank() || rt.nousAuth.signedIn) }
                 val drawer = rememberDrawerState(DrawerValue.Closed)
                 // Browser handovers appear as an inline live preview in chat. Never steal the screen mid-gesture.
                 val scope = rememberCoroutineScope()
+                BackHandler(dest != Dest.Chat || drawer.isOpen) {
+                    if (drawer.isOpen) scope.launch { drawer.close() } else goBack()
+                }
 
                 if (!onboarded) {
                     OnboardingScreen(rt) { rt.settings.onboarded = true; onboarded = true }
