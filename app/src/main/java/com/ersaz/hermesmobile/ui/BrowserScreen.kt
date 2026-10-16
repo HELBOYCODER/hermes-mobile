@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +57,8 @@ fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(700); tick++ } }
     var urlText by remember { mutableStateOf("") }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(handover) { if (handover != null) focused = true }
     val tabs = remember(tick) { b.tabList }
     val active = remember(tick) { b.active }
     LaunchedEffect(active?.id) { if (active == null) b.newTab(null) }
@@ -67,8 +70,12 @@ fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Return to previous Hermes screen", tint = skin.label)
             }
             Text("Browser · Manual control", modifier = Modifier.weight(1f), color = skin.title)
+            TextButton(onClick = { focused = !focused }) {
+                Text(if (focused) "Controls" else "Focus", color = skin.accent)
+            }
             if (handover != null) Button(onClick = { b.finishHandover(); onExit() }) { Text("Done") }
         }
+        if (!focused) {
         handover?.let { msg ->
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🤝 $msg", color = skin.warn, fontSize = 13.sp, modifier = Modifier.weight(1f))
@@ -92,6 +99,7 @@ fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { active?.let { t -> scope.launch { runCatching { b.navigate(t, urlText) } } } }),
             )
+        }
         }
         val a = active
         if (a != null) {
