@@ -58,6 +58,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import android.graphics.Bitmap
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -96,7 +98,7 @@ import java.io.ByteArrayOutputStream
 private val ContentMaxWidth = 760.dp
 
 @Composable
-fun ChatScreen(vm: ChatViewModel) {
+fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}) {
     val skin = LocalSkin.current
     val listState = rememberLazyListState()
     val context = LocalContext.current
@@ -146,6 +148,8 @@ fun ChatScreen(vm: ChatViewModel) {
             items(vm.items, key = { it.key }) { item -> ChatRow(item, vm) }
             if (vm.busy) item { Spinner() }
         }
+
+        BrowserMiniPreview(vm.runtime, onOpenBrowser)
 
         var showModels by remember { mutableStateOf(false) }
         StatusLine(vm) { showModels = true }
@@ -217,6 +221,60 @@ fun ChatScreen(vm: ChatViewModel) {
             },
             confirmButton = { TextButton(onClick = { vm.answerClarify(answer.ifBlank { "(no answer)" }) }) { Text("Answer") } },
         )
+    }
+}
+
+/**
+ * Open Minis-inspired in-chat activity monitor: read-only visual preview of Hermes' own tab.
+ * Take Over deliberately moves the existing WebView to a dedicated gesture-safe screen.
+ * Signing in is done by the human; no session cookies or credentials enter chat/model context.
+ */
+@Composable
+private fun BrowserMiniPreview(rt: com.ersaz.hermesmobile.HermesRuntime, onOpenBrowser: () -> Unit) {
+    val skin = LocalSkin.current
+    val browser = rt.browser
+    val handover by browser.handover.collectAsState()
+    val requests by browser.showRequests.collectAsState()
+    var frameNumber by remember { mutableIntStateOf(0) }
+    var preview by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2700)
+            frameNumber++
+        }
+    }
+    val tab = remember(frameNumber, requests, handover) { browser.active }
+    LaunchedEffect(tab?.id, frameNumber, handover) {
+        if (tab != null && tab.url != "about:blank") {
+            preview = runCatching { browser.thumbnail(tab) }.getOrNull()
+        } else preview = null
+    }
+    if (tab != null && tab.url != "about:blank") {
+        Surface(
+            modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = skin.surface,
+            shadowElevation = 2.dp,
+        ) {
+            Row(Modifier.clickable(onClick = onOpenBrowser).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                preview?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Preview of the active browser tab",
+                        modifier = Modifier.size(width = 120.dp, height = 78.dp).clip(RoundedCornerShape(10.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+                Column(Modifier.weight(1f).padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(if (handover == null) "Browser activity" else "Verification needs you",
+                        color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(tab.title.ifBlank { tab.url }.take(85), color = skin.dim, fontSize = 11.sp,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(if (handover == null) "Tap to expand" else "Take Over · complete sign-in or CAPTCHA",
+                        color = skin.accent, fontSize = 11.sp)
+                }
+            }
+        }
     }
 }
 
