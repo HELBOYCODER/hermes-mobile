@@ -307,7 +307,12 @@ class BrowserManager(private val rt: HermesRuntime) {
         return ok
     }
 
-    fun finishHandover() { handoverDone?.complete(true) }
+    fun finishHandover() {
+        // Persist WebView session cookies before unblocking the agent. Completion is
+        // user confirmation only; the agent must still verify the logged-in page.
+        CookieManager.getInstance().flush()
+        handoverDone?.complete(true)
+    }
 
     // ---------------------------------------------------------------- on-screen mirror
 
