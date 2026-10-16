@@ -250,7 +250,7 @@ private fun BrowserMiniPreview(rt: com.ersaz.hermesmobile.HermesRuntime, onOpenB
             preview = runCatching { browser.thumbnail(tab) }.getOrNull()
         } else preview = null
     }
-    if (tab != null && tab.url != "about:blank") {
+    if (tab != null && tab.url != "about:blank" && (handover != null || rt.browser.active?.loading == true)) {
         Surface(
             modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
             shape = RoundedCornerShape(16.dp),
@@ -296,15 +296,15 @@ private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
         it is ChatItem.Tool && it.result == null && it.name in setOf("terminal", "coding_workflow")
     } as? ChatItem.Tool
     val hasShells = TerminalTabs.sessions.isNotEmpty()
-    if (running != null || activeTool != null || hasShells) {
+    if (running != null || activeTool != null) {
         val output = running?.let { rt.processes.log(it.id, 5).orEmpty() }.orEmpty()
         // Terminal output is shown only to the owner in this UI, not added to LLM messages.
         var safe = rt.settings.redactEnvironment(output)
         (rt.modelStore.all().map { it.apiKey } + rt.settings.apiKey)
             .filter { it.length >= 8 }.forEach { safe = safe.replace(it, "[REDACTED]") }
-        val lines = safe.lines().takeLast(4).joinToString("\n").take(280)
+        val lines = safe.lines().takeLast(2).joinToString("\n").take(120)
         Surface(
-            modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+            modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
             shape = RoundedCornerShape(16.dp),
             color = skin.surface, shadowElevation = 2.dp,
         ) {
@@ -323,9 +323,7 @@ private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
                     color = skin.dim, fontSize = 11.sp,
                 )
                 if (lines.isNotBlank()) Text(lines, color = skin.label, fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                Text("Terminal opens a separate shell; it does not take over a running process.",
-                    color = skin.dim, fontSize = 10.sp)
+                    fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
