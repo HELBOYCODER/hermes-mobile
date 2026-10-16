@@ -1,6 +1,7 @@
 package com.ersaz.hermesmobile.ui
 
 import android.view.ViewGroup
+import android.view.MotionEvent
 import android.widget.FrameLayout
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -110,6 +111,18 @@ fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
                 update = { frame ->
                     val web = b.viewFor(a)
                     if (web.parent !== frame) {
+                        // Let WebView own swipe/slider gestures. Do not let any ancestor
+                        // (sheet, drawer, nested-scroll container) steal CAPTCHA drags.
+                        @Suppress("ClickableViewAccessibility")
+                        web.setOnTouchListener { view, event ->
+                            when (event.actionMasked) {
+                                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
+                                MotionEvent.ACTION_POINTER_DOWN -> view.parent?.requestDisallowInterceptTouchEvent(true)
+                                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                                    view.parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                            false
+                        }
                         (web.parent as? ViewGroup)?.removeView(web)
                         frame.removeAllViews()
                         frame.addView(web, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
