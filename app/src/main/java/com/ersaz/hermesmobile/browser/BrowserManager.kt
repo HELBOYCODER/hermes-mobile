@@ -247,6 +247,26 @@ class BrowserManager(private val rt: HermesRuntime) {
         f
     }
 
+    /**
+     * A low-resolution visual-only preview. The authenticated tab stays parked.
+     * No cookies, credentials or DOM text are transferred to the chat model.
+     */
+    suspend fun thumbnail(t: BrowserTab, width: Int = 320, height: Int = 200): Bitmap =
+        withContext(Dispatchers.Main) {
+            val w = width.coerceIn(64, 512)
+            val h = height.coerceIn(64, 512)
+            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565)
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            val vw = t.web.width.coerceAtLeast(1)
+            val vh = t.web.height.coerceAtLeast(1)
+            canvas.save()
+            canvas.scale(w.toFloat() / vw, h.toFloat() / vh)
+            t.web.draw(canvas)
+            canvas.restore()
+            bitmap
+        }
+
     /** Cookie header for the tab's site, written to a file so values never enter the model's context. */
     suspend fun cookiesFile(t: BrowserTab): Pair<List<String>, File?> = withContext(Dispatchers.Main) {
         val raw = CookieManager.getInstance().getCookie(t.url).orEmpty()
