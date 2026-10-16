@@ -59,7 +59,7 @@ class SkillStore(val dir: File) {
         if (skills.isEmpty()) return null
         val sb = StringBuilder()
         sb.append("## Skills (mandatory)\n")
-        sb.append("Before replying, scan the skills below. If one clearly matches your task, load it with skill_view(name) and follow its instructions. ")
+        sb.append("Before replying, scan the skills below. For substantial engineering, debugging or design tasks, load arena and use parallel candidate subagents when genuinely independent and safe. If a skill matches your task, load it with skill_view(name) and follow its instructions. ")
         sb.append("If a skill has issues, fix it with skill_manage(action='patch').\n\n<available_skills>\n")
         skills.groupBy { it.category }.forEach { (cat, list) ->
             sb.append("  $cat:\n")
