@@ -16,6 +16,9 @@ class CronRunner(private val rt: HermesRuntime) {
     private var ticker: Job? = null
     private val running = ConcurrentHashMap.newKeySet<String>()
 
+    // start()/stop() are called from the service and the UI on different threads; unsynchronized, two
+    // tickers could be launched and every due job would be checked twice per tick.
+    @Synchronized
     fun start() {
         if (ticker?.isActive == true) return
         ticker = rt.scope.launch(Dispatchers.IO) {
@@ -28,6 +31,7 @@ class CronRunner(private val rt: HermesRuntime) {
         }
     }
 
+    @Synchronized
     fun stop() { ticker?.cancel(); ticker = null }
 
     fun runNowAsync(job: CronJob) {
@@ -56,6 +60,8 @@ class CronRunner(private val rt: HermesRuntime) {
                     if (j.repeat > 0 && j.runCount >= j.repeat) j.enabled = false
                 }
                 deliver(job, "⏰ ${job.name}\n\n$result")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 rt.cron.update(job.id) { j -> j.lastRunAt = System.currentTimeMillis(); j.lastStatus = "error: ${e.message}" }
                 deliver(job, "⏰ ${job.name} failed: ${e.message}")

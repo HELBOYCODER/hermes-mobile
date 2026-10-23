@@ -26,7 +26,8 @@ abstract class Tool(
     /** One-line preview of the call for progress displays (Hermes' "┊ 💻 terminal ls -la"). */
     open fun preview(args: JSONObject): String {
         for (key in listOf("command", "query", "path", "url", "urls", "name", "action", "goal", "text", "message", "question", "pattern")) {
-            if (args.has(key)) return args.opt(key).toString().replace('\n', ' ').take(90)
+            val value = args.opt(key)
+            if (value != null && value != JSONObject.NULL) return value.toString().replace('\n', ' ').take(90)
         }
         return ""
     }
