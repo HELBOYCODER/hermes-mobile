@@ -65,6 +65,14 @@ class BrowserManager(private val rt: HermesRuntime) {
         tabList.forEach { park(it) }
     }
 
+    /** The activity owning [h] is going away: unparks the tabs so the singleton no longer pins that window. */
+    fun detachHost(h: android.widget.FrameLayout) {
+        if (host !== h) return
+        host = null
+        val unpark = { tabList.forEach { t -> if (t.web.parent === h) h.removeView(t.web) } }
+        if (Looper.myLooper() == Looper.getMainLooper()) unpark() else main.post { unpark() }
+    }
+
     private fun park(t: BrowserTab) {
         val h = host ?: return
         if (t.web.parent === h) return

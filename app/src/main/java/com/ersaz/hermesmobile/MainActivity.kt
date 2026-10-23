@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
@@ -119,6 +120,8 @@ class MainActivity : ComponentActivity() {
     private val vm: ChatViewModel by viewModels()
     private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { HermesRuntime.get(this).permissions.onResult(it) }
     private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    /** Activity-owned views/launchers handed to the process-wide runtime; released in [onDestroy]. */
+    private var browserHost: android.widget.FrameLayout? = null
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,16 +151,25 @@ class MainActivity : ComponentActivity() {
         rt.browser.attachHost(android.widget.FrameLayout(this).also {
             it.alpha = 0.01f
             (window.decorView as android.view.ViewGroup).addView(it, android.view.ViewGroup.LayoutParams(1, 1))
+            browserHost = it
         })
-        if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= 33 && savedInstanceState == null &&
+            androidx.core.content.ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         if (!recovery.getBoolean("safe", false)) {
             rt.startOptionalServices()
         }
-        handleShare(intent)
+        // A recreated activity gets the original share intent again; importing it twice duplicated attachments.
+        if (savedInstanceState == null) handleShare(intent)
 
         setContent {
             val version by rt.settings.version.collectAsState()
             val skin = remember(version) { Skins.byName(rt.settings.skin) }
+            // enableEdgeToEdge() alone follows the *system* dark mode, not the skin: a dark skin on a light
+            // system drew dark status/nav icons on a dark bar (and vice versa). Match the bars to the skin.
+            androidx.compose.runtime.LaunchedEffect(skin.light) { applySystemBars(skin.light) }
             val fs = remember(version) { rt.settings.fontScaleValue() }
             val density = androidx.compose.ui.platform.LocalDensity.current
             androidx.compose.runtime.CompositionLocalProvider(
@@ -244,7 +256,8 @@ class MainActivity : ComponentActivity() {
                             if (dest != Dest.Browser) TopAppBar(
                                 title = {
                                     Text(if (dest == Dest.Chat) (vm.activeBot?.let { "${it.name} · " }.orEmpty() + vm.sessionTitle.ifBlank { skin.agentName }) else dest.title,
-                                        color = skin.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                                        color = skin.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 },
                                 navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.label) } },
                                 actions = {
@@ -278,7 +291,9 @@ class MainActivity : ComponentActivity() {
                             )
                         },
                     ) { pad ->
-                        Column(Modifier.padding(pad).fillMaxSize()) {
+                        // Consume what the Scaffold already padded so screens that add imePadding() (Terminal)
+                        // don't get the keyboard height twice.
+                        Column(Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()) {
                             when (dest) {
                                 Dest.Chat -> ChatScreen(vm, onOpenBrowser = { navigate(Dest.Browser) }, onOpenTerminal = { navigate(Dest.Terminal) })
                                 Dest.Bots -> BotsScreen(rt, vm) { navigate(Dest.Chat) }
@@ -306,6 +321,24 @@ class MainActivity : ComponentActivity() {
                 }
             } }
         }
+    }
+
+    private fun applySystemBars(light: Boolean) {
+        val transparent = android.graphics.Color.TRANSPARENT
+        val style = if (light) androidx.activity.SystemBarStyle.light(transparent, transparent)
+        else androidx.activity.SystemBarStyle.dark(transparent)
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+    }
+
+    override fun onDestroy() {
+        // Only touch the runtime if this activity actually wired itself into it (not on the recovery redirect).
+        browserHost?.let { host ->
+            val rt = HermesRuntime.get(this)
+            if (rt.permissions.launcher === permLauncher) rt.permissions.launcher = null
+            rt.browser.detachHost(host)
+        }
+        browserHost = null
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
