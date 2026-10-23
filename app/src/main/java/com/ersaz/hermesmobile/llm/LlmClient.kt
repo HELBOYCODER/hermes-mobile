@@ -129,9 +129,17 @@ class LlmClient(
 
         val call = http.newBuilder().readTimeout(10, TimeUnit.MINUTES).build().newCall(req)
         activeCall = call
-        val response = suspendCancellableCoroutine { cont ->
-            cont.invokeOnCancellation { call.cancel() }
-            try { cont.resumeWith(Result.success(call.execute())) } catch (e: Exception) { cont.resumeWith(Result.failure(e)) }
+        val response = try {
+            suspendCancellableCoroutine<okhttp3.Response> { cont ->
+                cont.invokeOnCancellation { call.cancel() }
+                try { cont.resumeWith(Result.success(call.execute())) } catch (e: Exception) { cont.resumeWith(Result.failure(e)) }
+            }
+        } catch (e: java.io.IOException) {
+            // A dropped connection / timeout before any byte arrived is the most common failure on mobile
+            // networks and is safe to replay; it used to fail the turn immediately. A user interrupt
+            // (cancel()) also surfaces as IOException and must not be retried.
+            if (call.isCanceled()) throw e
+            throw LlmException("Network error talking to the provider: ${e.message ?: e.javaClass.simpleName}", retryable = true)
         }
         response.use { resp ->
             if (!resp.isSuccessful) {
