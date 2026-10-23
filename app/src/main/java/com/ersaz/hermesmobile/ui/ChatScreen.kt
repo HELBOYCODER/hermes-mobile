@@ -59,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import android.graphics.Bitmap
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,8 +105,24 @@ fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // Follow the conversation, but don't yank the reader back down on every streamed token after they
+    // scrolled up to read something. A new item (their own message, a tool call) still jumps to the end.
+    val atBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            // "At the bottom" = the final item's end is (nearly) on screen; slack absorbs the newest delta.
+            last == null || (last.index >= info.totalItemsCount - 1 && last.offset + last.size <= info.viewportEndOffset + 400)
+        }
+    }
+    var lastCount by remember { mutableStateOf(0) }
     LaunchedEffect(vm.items.size, (vm.items.lastOrNull() as? ChatItem.Assistant)?.text?.length) {
-        if (vm.items.isNotEmpty()) listState.animateScrollToItem(vm.items.size)
+        if (vm.items.isEmpty()) { lastCount = 0; return@LaunchedEffect }
+        val grew = vm.items.size != lastCount
+        lastCount = vm.items.size
+        val end = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+        if (grew) listState.animateScrollToItem(end)
+        else if (atBottom) listState.scrollToItem(end, Int.MAX_VALUE / 2)
     }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -521,12 +538,13 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 item.images.forEach { DataImage(it) }
+                // No fillMaxWidth: it stretched every bubble (even "hi") to the 320dp cap.
                 if (item.text.isNotBlank()) Text(item.text, color = skin.text, fontSize = 15.sp, lineHeight = 21.sp,
-                    style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.fillMaxWidth())
+                    style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start))
                 val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
                 item.failure?.let { failure ->
                     Text(failure, color = skin.error, fontSize = 12.sp,
-                        style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                        style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.padding(top = 8.dp))
                 }
                 Row {
                     TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }) { Text("Copy", fontSize = 12.sp) }
