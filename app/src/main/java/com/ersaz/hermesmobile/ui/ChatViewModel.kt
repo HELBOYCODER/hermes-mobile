@@ -296,8 +296,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
 
     override fun stop() {
         agent.interrupt()
-        approval?.result?.complete(false to false)
-        clarify?.result?.complete("(user cancelled)")
+        // Resolve and dismiss any prompt the turn is blocked on; otherwise the dialog stays on screen
+        // after Stop / New chat and the interrupted turn never finishes awaiting it.
+        val pendingApproval = approval
+        val pendingClarify = clarify
+        ui { if (approval === pendingApproval) approval = null; if (clarify === pendingClarify) clarify = null }
+        pendingApproval?.result?.complete(false to false)
+        pendingClarify?.result?.complete("(user cancelled)")
     }
 
     override fun background(prompt: String) {
@@ -353,8 +358,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
             }
             if (busy && runtime.settings.busyMode == "queue" && images.isEmpty()) { queued += text; return@launch }
             if (busy) {
-                // Hermes "busy" default: a new message interrupts the running turn.
-                agent.interrupt(); job?.join()
+                // Hermes "busy" default: a new message interrupts the running turn. stop() also releases a
+                // pending approval/clarify prompt, which would otherwise make join() wait forever.
+                stop(); job?.join()
             }
             val lead = text.ifEmpty { if (images.isNotEmpty()) "What's in this image?" else "Please look at the attached file(s)." }
             runTurn(lead + attachmentNote(files), images, showUser = true)
