@@ -97,17 +97,26 @@ class Session(
     var updatedAt: Long = System.currentTimeMillis(),
     var model: String = "",
     var systemPrompt: String? = null,
-    val messages: MutableList<Message> = mutableListOf(),
+    messages: List<Message> = emptyList(),
     var promptTokens: Long = 0,
     var completionTokens: Long = 0,
     var lastPromptTokens: Long = 0,
     var apiCalls: Int = 0,
     var compressions: Int = 0,
-    val todos: MutableList<TodoItem> = mutableListOf(),
+    todos: List<TodoItem> = emptyList(),
     var modelOverride: String? = null,
     var autoCompact: Boolean = true,
     var botId: String? = null, // which Bot Mode profile this belongs to (null = the plain app chat)
 ) {
+    /**
+     * The agent appends on a background thread while the UI rebuilds the transcript and the store serializes
+     * the session on others. With a plain ArrayList those readers threw ConcurrentModificationException
+     * (a crash when it hit the main thread). Copy-on-write iterates over a stable snapshot; appends are rare
+     * relative to reads, so the copy cost is negligible.
+     */
+    val messages: MutableList<Message> = java.util.concurrent.CopyOnWriteArrayList(messages)
+    val todos: MutableList<TodoItem> = java.util.concurrent.CopyOnWriteArrayList(todos)
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("title", title).put("source", source).put("chat_key", chatKey)
         .put("created_at", createdAt).put("updated_at", updatedAt).put("model", model)
@@ -178,7 +187,8 @@ data class SessionSummary(
 
 /** Sessions persisted as JSON files under $HERMES_HOME/sessions (Hermes uses SQLite+FTS5; files keep this simple). */
 class SessionStore(private val dir: File) {
-    private val cache = mutableMapOf<String, Session>()
+    // list()/search() read the cache without the lock while save()/load() write it from other threads.
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Session>()
 
     init { dir.mkdirs() }
 
@@ -188,7 +198,11 @@ class SessionStore(private val dir: File) {
         cache[s.id] = s
         val tmp = File(dir, "${s.id}.json.tmp")
         tmp.writeText(s.toJson().toString())
-        tmp.renameTo(File(dir, "${s.id}.json"))
+        if (!tmp.renameTo(File(dir, "${s.id}.json"))) {
+            // Rename can fail on some filesystems when the target exists; never silently drop the save.
+            File(dir, "${s.id}.json").writeText(tmp.readText())
+            tmp.delete()
+        }
     }
 
     @Synchronized

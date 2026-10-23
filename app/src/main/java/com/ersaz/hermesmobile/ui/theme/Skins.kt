@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /**
  * Hermes skins (hermes_cli/skin_engine.py), ported 1:1: palette, spinner faces/verbs,
@@ -45,7 +46,12 @@ data class Skin(
     }
 }
 
-private fun c(hex: String) = Color(android.graphics.Color.parseColor(hex))
+/** "#RRGGBB" → opaque Color. Pure Kotlin (no android.graphics), so palettes are testable on the JVM. */
+private fun c(hex: String): Color {
+    val rgb = hex.removePrefix("#")
+    require(rgb.length == 6) { "Skin colors are #RRGGBB: $hex" }
+    return Color(0xFF000000 or rgb.toLong(16))
+}
 private fun wings(vararg g: String) = g.map { "⟪$it" to "$it⟫" }
 
 object Skins {
@@ -115,9 +121,12 @@ object Skins {
             waitingFaces = listOf("(✦)", "(▲)", "(◇)", "(<>)", "(🔥)"), thinkingFaces = listOf("(✦)", "(▲)", "(◇)", "(⌁)", "(🔥)"),
             thinkingVerbs = listOf("banking into the draft", "measuring burn", "reading the updraft", "tracking ember fall", "setting wing angle", "holding the flame core", "plotting a hot landing", "coiling for lift"),
             wings = wings("✦", "▲", "◌", "◇")),
-    )
+    ).map { it.readable() }
 
     fun byName(name: String) = all.firstOrNull { it.name == name } ?: all.first()
+
+    /** WCAG AA for body text. Secondary text (hints, timestamps, placeholders) is small, so it needs the full ratio. */
+    const val MIN_TEXT_CONTRAST = 4.5
 
     /** Braille caduceus from hermes_cli/banner.py, colored per line by the skin. */
     val CADUCEUS = listOf(
@@ -135,6 +144,44 @@ object Skins {
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⠑⢶⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠁⢰⡆⠈⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⠈⣡⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+    )
+}
+
+/** WCAG 2.x contrast ratio between two opaque colors (1.0 … 21.0). */
+fun contrastRatio(a: Color, b: Color): Double {
+    val la = a.luminance().toDouble()
+    val lb = b.luminance().toDouble()
+    return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
+}
+
+/**
+ * Nudges [fg] toward [toward] (the skin's main text color) just far enough to reach [min] contrast against
+ * every background in [backgrounds]. Colors that already pass are returned unchanged, so skins keep their look.
+ */
+fun ensureContrast(fg: Color, backgrounds: List<Color>, toward: Color, min: Double = Skins.MIN_TEXT_CONTRAST): Color {
+    fun ok(c: Color) = backgrounds.all { contrastRatio(c, it) >= min }
+    if (ok(fg)) return fg
+    var step = 1
+    while (step <= 20) {
+        val c = androidx.compose.ui.graphics.lerp(fg, toward, step / 20f)
+        if (ok(c)) return c
+        step++
+    }
+    return toward
+}
+
+/**
+ * The CLI palettes were tuned for terminals; on a phone several skins drew hints, placeholders and warnings
+ * below 3:1 (mono, slate, poseidon, sisyphus, ares, warm-lightmode). Lift only the colors that fail.
+ */
+internal fun Skin.readable(): Skin {
+    val bgs = listOf(bg, surface)
+    return copy(
+        dim = ensureContrast(dim, bgs, text),
+        label = ensureContrast(label, bgs, text),
+        warn = ensureContrast(warn, bgs, text),
+        error = ensureContrast(error, bgs, text),
+        ok = ensureContrast(ok, bgs, text),
     )
 }
 

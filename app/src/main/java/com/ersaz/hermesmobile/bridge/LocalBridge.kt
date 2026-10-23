@@ -33,12 +33,19 @@ class LocalBridge(private val rt: HermesRuntime) {
         Thread({
             while (!s.isClosed) {
                 val c = try { s.accept() } catch (_: Exception) { break }
-                Thread({ handle(c) }, "hermes-bridge-conn").apply { isDaemon = true; start() }
+                Thread({
+                    // An exception escaping a raw Thread kills the whole app (default handler): a client that
+                    // resets the connection or times out must only end its own request.
+                    try { handle(c) } catch (e: Exception) { rt.log.e("bridge", "Request failed: ${e.message}") }
+                }, "hermes-bridge-conn").apply { isDaemon = true; start() }
             }
         }, "hermes-bridge").apply { isDaemon = true; start() }
     }
 
     private fun handle(socket: Socket) = socket.use { sock ->
+        // Any app on the device can reach 127.0.0.1: bound the header phase so an idle or slow client
+        // can't pin a thread forever. Chat responses stream for long, so the timeout is lifted after auth.
+        sock.soTimeout = HEADER_TIMEOUT_MS
         val input = sock.getInputStream().buffered()
         val out = sock.getOutputStream()
         val requestLine = readLine(input) ?: return
@@ -49,9 +56,15 @@ class LocalBridge(private val rt: HermesRuntime) {
             val i = line.indexOf(':')
             if (i > 0) headers[line.substring(0, i).trim().lowercase()] = line.substring(i + 1).trim()
         }
+        // Authenticate before allocating anything the client sized: an unauthenticated
+        // "Content-Length: 2000000000" used to allocate that buffer and crash the app with OOM.
+        if (!java.security.MessageDigest.isEqual((headers["authorization"] ?: "").toByteArray(), "Bearer $token".toByteArray())) {
+            return respond(out, 401, "unauthorized\n")
+        }
         val len = headers["content-length"]?.toIntOrNull() ?: 0
+        if (len < 0 || len > MAX_BODY_BYTES) return respond(out, 413, "request too large\n")
         val body = ByteArray(len).also { b -> var r = 0; while (r < len) { val n = input.read(b, r, len - r); if (n < 0) break; r += n } }
-        if (headers["authorization"] != "Bearer $token") return respond(out, 401, "unauthorized\n")
+        sock.soTimeout = 0
         val path = requestLine.split(' ').getOrNull(1).orEmpty()
         when {
             path.startsWith("/v1/chat") -> chat(out, headers["x-hermes-session"] ?: "terminal", String(body, Charsets.UTF_8))
@@ -89,5 +102,10 @@ class LocalBridge(private val rt: HermesRuntime) {
             sb.append(c.toChar())
             if (sb.length > 8192) return sb.toString()
         }
+    }
+
+    private companion object {
+        const val HEADER_TIMEOUT_MS = 15_000
+        const val MAX_BODY_BYTES = 8 * 1024 * 1024
     }
 }

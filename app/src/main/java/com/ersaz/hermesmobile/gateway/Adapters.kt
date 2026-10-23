@@ -146,7 +146,8 @@ class TelegramAdapter(rt: HermesRuntime, gw: GatewayManager, private val token: 
         m.optJSONObject("document")?.let { d -> text += "\n[Attached document: ${d.optString("file_name")} — not downloaded]" }
         val thread = if (m.optBoolean("is_topic_message")) m.optLong("message_thread_id").toString() else null
         gw.onIncoming(IncomingMessage("telegram", chat.optLong("id").toString(), from.optLong("id").toString(),
-            from.optString("username").ifBlank { from.optString("first_name") }, text, images, isDm, thread))
+            from.optString("username").ifBlank { from.optString("first_name") }, text, images, isDm, thread,
+            handle = from.optString("username").takeIf { it.isNotBlank() }))
     }
 
     private fun downloadImage(fileId: String): String? {
@@ -277,7 +278,7 @@ class DiscordAdapter(rt: HermesRuntime, gw: GatewayManager, private val token: S
                 val images = d.optJSONArray("attachments")?.objects()
                     ?.filter { it.optString("content_type").startsWith("image/") }?.map { it.optString("url") } ?: emptyList()
                 gw.onIncoming(IncomingMessage("discord", d.optString("channel_id"), author.optString("id"),
-                    author.optString("username"), text, images, isDm))
+                    author.optString("username"), text, images, isDm, handle = author.optString("username").takeIf { it.isNotBlank() }))
             }
         }
     }

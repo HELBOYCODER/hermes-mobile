@@ -178,7 +178,8 @@ class HermesRuntime(val app: Application) {
         }
     }
 
-    private var notifId = 1000
+    /** notify() is called from many coroutines at once (cron, gateway, sub-agents); ++ on a plain Int lost ids. */
+    private val notifId = java.util.concurrent.atomic.AtomicInteger(1000)
 
     /** Notification only when the user isn't looking at the app (e.g. after a browser sign-in). */
     fun notifyIfBackground(title: String, text: String) {
@@ -196,7 +197,7 @@ class HermesRuntime(val app: Application) {
             .setContentIntent(intent)
             .setAutoCancel(true)
             .build()
-        try { NotificationManagerCompat.from(app).notify(notifId++, n) } catch (_: SecurityException) {}
+        try { NotificationManagerCompat.from(app).notify(notifId.getAndIncrement(), n) } catch (_: SecurityException) {}
     }
 
     companion object {
