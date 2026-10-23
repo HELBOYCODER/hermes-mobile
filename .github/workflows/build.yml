@@ -10,6 +10,12 @@ on:
 permissions:
   contents: write
 
+# Never let two builds of the same ref race on one release / artifact (the 2.6.2 failure:
+# four pushes within a minute all rewrote the v2.6.2 assets at once and one 404'd).
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -89,7 +95,9 @@ jobs:
         continue-on-error: true
         with:
           name: hermes-mobile-${{ env.APP_VERSION }}-arm64
-          path: hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
+          path: |
+            hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
+            hermes-mobile-${{ env.APP_VERSION }}-arm64.apk.sha256
 
       - name: Upload test results
         if: always()
@@ -99,17 +107,28 @@ jobs:
           path: app/build/test-results/testDebugUnitTest/
           if-no-files-found: ignore
 
-      - if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      # Publish only from a version tag. Pushes to main build and upload the APK as an artifact but
+      # no longer overwrite the assets of an already published release with a newer, untagged commit.
+      - name: Check tag matches versionName
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${APP_VERSION}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match versionName ${APP_VERSION} in app/build.gradle"
+            exit 1
+          fi
+          NOTES="docs/releases/v${APP_VERSION}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::Missing release notes $NOTES"
+            exit 1
+          fi
+          echo "RELEASE_NOTES=$NOTES" >> "$GITHUB_ENV"
+
+      - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.APP_VERSION }}
-          target_commitish: ${{ github.sha }}
           name: Hermes Mobile ${{ env.APP_VERSION }}
+          body_path: ${{ env.RELEASE_NOTES }}
           files: |
             hermes-mobile-${{ env.APP_VERSION }}-arm64.apk
             hermes-mobile-${{ env.APP_VERSION }}-arm64.apk.sha256
-          body: |
-            فارسی: ورود حساب و بازگشت مرورگر بهبود یافت؛ Test کنار مدل‌ها، فایل‌های هر چت، تاریخ‌بندی گفتگوها، گردش کار Spec Kit، وظایف و شواهد تست ماندگار، checkpoint و کپشن لینک‌های عمومی اضافه شدند. Whisper چندزبانه با دانلود اختیاری و بررسی هش مدل در Coding قرار دارد.
-            English: Improved account/browser return, inline model probes, per-chat files, grouped sessions, Spec Kit workflows, persistent tasks/test evidence, file checkpoints, public-link captions and optional native multilingual Whisper transcription.
-            Install over the previous version to preserve data. Android ARM64 only.
-            OpenCode Free upstream access restrictions remain; listing a model does not prove inference access. No physical-device login/native performance certification is claimed. Remote integrations require user configuration and their own host.
