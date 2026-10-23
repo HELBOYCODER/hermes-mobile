@@ -5,6 +5,7 @@ import com.ersaz.hermesmobile.core.Settings
 import com.ersaz.hermesmobile.core.objects
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -20,12 +21,31 @@ data class IncomingMessage(
     val images: List<String> = emptyList(),
     val isDm: Boolean,
     val threadId: String? = null,
+    /**
+     * The platform's unique, owner-assignable handle (Telegram @username, Discord username), or null.
+     * Never a display name: [userName] may fall back to a free-form first name anyone can set.
+     */
+    val handle: String? = null,
 )
 
 data class PairingRequest(val platform: String, val userId: String, val userName: String, val code: String, val at: Long)
 
 /** Hermes' messaging gateway: one agent, many platforms, per-chat sessions, DM pairing. */
 class GatewayManager(private val rt: HermesRuntime) {
+    companion object {
+        /**
+         * Allow-list check: "*" opens the gateway, otherwise the stable user id or the unique handle must be
+         * listed. Display names are deliberately not matched: a Telegram user without a username used to be
+         * checked by first name, which anyone can set to an allowed name to get in.
+         */
+        fun isAllowed(allowed: List<String>, userId: String, handle: String?): Boolean {
+            if ("*" in allowed) return true
+            if (userId.isNotBlank() && userId in allowed) return true
+            val h = handle?.trim()?.removePrefix("@")?.takeIf { it.isNotBlank() } ?: return false
+            return allowed.any { it.removePrefix("@").equals(h, ignoreCase = true) }
+        }
+    }
+
     private val dir = File(rt.hermesHome, "gateway").apply { mkdirs() }
     private val sessionsFile = File(dir, "sessions.json")
     private val pairedFile = File(dir, "paired.json")
@@ -41,7 +61,7 @@ class GatewayManager(private val rt: HermesRuntime) {
 
     fun log(line: String) {
         val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
-        _log.value = (_log.value + "$ts  $line").takeLast(200)
+        _log.update { (it + "$ts  $line").takeLast(200) }
     }
 
     // ----------------------------------------------------------- lifecycle
@@ -92,8 +112,7 @@ class GatewayManager(private val rt: HermesRuntime) {
             "slack" -> rt.settings.slackAllowed
             else -> ""
         }.let { Settings.splitList(it) }
-        if (allowed.contains("*")) return true
-        if (msg.userId in allowed || msg.userName.removePrefix("@") in allowed) return true
+        if (isAllowed(allowed, msg.userId, msg.handle)) return true
         if (isPaired(msg.platform, msg.userId)) return true
 
         // Unknown user → DM pairing code the owner approves in the app (hermes pairing approve).
@@ -101,7 +120,7 @@ class GatewayManager(private val rt: HermesRuntime) {
         val existing = _pending.value.firstOrNull { it.platform == msg.platform && it.userId == msg.userId }
         val code = existing?.code ?: (1..6).map { "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".random() }.joinToString("")
         if (existing == null) {
-            _pending.value = _pending.value + PairingRequest(msg.platform, msg.userId, msg.userName, code, System.currentTimeMillis())
+            _pending.update { list -> list + PairingRequest(msg.platform, msg.userId, msg.userName, code, System.currentTimeMillis()) }
             rt.notify("Hermes pairing request", "${msg.userName} on ${msg.platform} wants access. Code $code — approve in Messaging gateway.")
             log("pairing request from ${msg.userName} (${msg.userId}) code $code")
         }
@@ -133,11 +152,11 @@ class GatewayManager(private val rt: HermesRuntime) {
         arr.put(JSONObject().put("id", req.userId).put("name", req.userName).put("at", System.currentTimeMillis()))
         o.put(req.platform, arr)
         pairedFile.writeText(o.toString(2))
-        _pending.value = _pending.value.filterNot { it == req }
+        _pending.update { list -> list.filterNot { it == req } }
         log("approved ${req.userName} on ${req.platform}")
     }
 
-    fun rejectPairing(req: PairingRequest) { _pending.value = _pending.value.filterNot { it == req } }
+    fun rejectPairing(req: PairingRequest) { _pending.update { list -> list.filterNot { it == req } } }
 
     @Synchronized
     fun revoke(platform: String, userId: String) {
