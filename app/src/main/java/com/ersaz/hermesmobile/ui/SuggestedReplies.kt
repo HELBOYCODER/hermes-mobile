@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ersaz.hermesmobile.ui.theme.LocalSkin
 
 /**
@@ -77,7 +78,7 @@ fun SuggestedRepliesRow(vm: ChatViewModel) {
                     vm.input = suggestion
                     dismissedFor = last.key
                 },
-                label = { Text(suggestion, color = skin.text) },
+                label = { Text(suggestion, color = skin.text, fontSize = 13.sp) },
             )
         }
     }

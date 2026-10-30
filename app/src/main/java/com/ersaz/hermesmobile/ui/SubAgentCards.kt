@@ -126,26 +126,26 @@ private fun SubAgentCard(job: AgentJob, rt: com.ersaz.hermesmobile.HermesRuntime
                 overflow = TextOverflow.Ellipsis)
             if (isActive) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { steerField = !steerField }) { Text("Steer", fontSize = 12.sp) }
-                    TextButton(onClick = { rt.agentJobs.cancel(job) }) { Text("Stop", fontSize = 12.sp, color = skin.error) }
+                    OutlinedButton(onClick = { steerField = !steerField }) { Text("Steer", fontSize = 13.sp) }
+                    TextButton(onClick = { rt.agentJobs.cancel(job) }) { Text("Stop", fontSize = 13.sp, color = skin.error) }
                 }
                 if (steerField) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(value = steerText, onValueChange = { steerText = it },
-                            placeholder = { Text("Steer this sub-agent…", fontSize = 12.sp) },
+                            placeholder = { Text("Steer this sub-agent…", fontSize = 13.sp) },
                             modifier = Modifier.weight(1f))
                         TextButton(onClick = {
                             val ok = rt.agentJobs.steer(job, steerText)
                             steerNote = if (ok) "Steer sent." else "Job already finished — steer not applied."
                             steerText = ""; steerField = false
-                        }, enabled = steerText.isNotBlank()) { Text("Send", fontSize = 12.sp) }
+                        }, enabled = steerText.isNotBlank()) { Text("Send", fontSize = 13.sp) }
                     }
                 }
                 if (steerNote.isNotBlank()) Text(steerNote, color = skin.dim, fontSize = 11.sp)
             } else {
                 Row {
                     TextButton(onClick = { expanded = !expanded }) {
-                        Text(if (expanded) "Hide result" else "Show result", fontSize = 12.sp)
+                        Text(if (expanded) "Hide result" else "Show result", fontSize = 13.sp)
                     }
                 }
                 if (expanded && job.result.isNotBlank()) {

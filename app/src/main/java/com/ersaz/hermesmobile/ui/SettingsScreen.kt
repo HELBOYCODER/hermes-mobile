@@ -279,6 +279,7 @@ fun SettingsScreen(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
         }
         if (piStatus.isNotBlank()) Text(piStatus, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 6.dp))
         Toggle("Spec-first in chat (default on)", s.specFirst, "When on, build requests first go through constitution → spec → plan → task checklist, then implementation. When off, chat behaves as before.") { s.specFirst = it; refresh++ }
+        Toggle("Team mode (default on)", s.teamMode, "Builder → reviewer (fresh session) + planner, researcher, implementer, tester, security. Turn off for single-agent chat.") { s.teamMode = it; refresh++ }
         }
 
         if (category == SettingsCategory.Models) {

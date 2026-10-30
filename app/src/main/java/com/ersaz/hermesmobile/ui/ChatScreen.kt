@@ -90,9 +90,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.ersaz.hermesmobile.commands.Commands
 import com.ersaz.hermesmobile.stt.VoiceLang
-import com.ersaz.hermesmobile.ui.theme.HermesTheme
 import com.ersaz.hermesmobile.ui.theme.LocalSkin
-import com.ersaz.hermesmobile.ui.theme.Skins
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -103,11 +101,11 @@ private val ContentMaxWidth = 760.dp
 
 @Composable
 fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal: () -> Unit = {}) {
-    // The chat page renders in the atelier skin (ui-ux-pro-max SaaS palette + Inter/Source Serif 4
-    // stand-ins); every other screen keeps the user's chosen skin.
-    HermesTheme(Skins.byName("atelier")) {
-        ChatScreenBody(vm, onOpenBrowser, onOpenTerminal)
-    }
+    // 2.7.2: NO chat-only skin. The chat page uses the ambient theme from
+    // MainActivity — the user's chosen skin — exactly like every other screen.
+    // The old atelier wrapper made the chat page a foreign palette pasted into
+    // the app (light cards on dark skins and vice versa); it is gone.
+    ChatScreenBody(vm, onOpenBrowser, onOpenTerminal)
 }
 
 @Composable
@@ -205,7 +203,7 @@ private fun ChatScreenBody(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, on
                     LazyColumn(Modifier.heightIn(max = 220.dp)) {
                         items(sugg) { (cmd, desc) ->
                             Row(Modifier.fillMaxWidth().clickable { vm.input = cmd }.padding(horizontal = 14.dp, vertical = 9.dp)) {
-                                Text(cmd.trim(), color = skin.accent, fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.width(130.dp))
+                                Text(cmd.trim(), color = skin.accent, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.width(130.dp))
                                 Text(desc, color = skin.dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
@@ -216,7 +214,7 @@ private fun ChatScreenBody(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, on
 
         if (vm.queued.isNotEmpty()) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${vm.queued.size} queued", color = skin.label, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text("${vm.queued.size} queued", color = skin.label, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 IconButton(onClick = { vm.queued.clear() }) { Icon(Icons.Default.Close, "clear queue", tint = skin.dim) }
             }
         }
@@ -240,11 +238,11 @@ private fun ChatScreenBody(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, on
             },
             confirmButton = {
                 Row {
-                    TextButton(onClick = { vm.answerApproval(true, always = true) }) { Text("Always (session)") }
-                    TextButton(onClick = { vm.answerApproval(true) }) { Text("Allow once") }
+                    TextButton(onClick = { vm.answerApproval(true, always = true) }) { Text("Always (session)", fontSize = 13.sp) }
+                    TextButton(onClick = { vm.answerApproval(true) }) { Text("Allow once", fontSize = 13.sp) }
                 }
             },
-            dismissButton = { TextButton(onClick = { vm.answerApproval(false) }) { Text("Deny", color = skin.error) } },
+            dismissButton = { TextButton(onClick = { vm.answerApproval(false) }) { Text("Deny", color = skin.error, fontSize = 13.sp) } },
         )
     }
 
@@ -318,21 +316,10 @@ private fun HarnessControls(vm: ChatViewModel) {
         val lastUser = vm.items.filterIsInstance<ChatItem.User>().lastOrNull()?.text.orEmpty()
         com.ersaz.hermesmobile.agent.RunCheckpoint.save(rt, vm.sessionTitle.ifBlank { "chat" }, vm.items.size, lastUser, last.text)
     }
-    var showDetails by androidx.compose.runtime.remember { mutableStateOf(false) }
+    // 2.7.2 declutter: the persistent "Run: …" line and its Run info details no
+    // longer live on the chat page. The same run info is shown in the model
+    // picker sheet (model pill tap) instead; nothing about the run itself changed.
     Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Run: ${s.engine} · ${s.provider} · ${s.model.ifBlank { "no model" }} · thinking ${s.reasoningEffort.ifBlank { "default" }}",
-                color = skin.dim, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            TextButton(onClick = { showDetails = !showDetails }) { Text(if (showDetails) "Hide" else "Run info") }
-        }
-        if (s.engine == "copilot") Text("Copilot (Foundry) is a remote stub in this build — nothing is sent to Foundry; this chat runs the native engine.",
-            color = skin.dim, fontSize = 11.sp)
-        if (showDetails) {
-            Text("Instructions/context: native Hermes agent prompt + Spec-first ${if (s.specFirst) "ON" else "OFF"} + task routing ${if (s.taskRouting) "ON" else "OFF"}. " +
-                "Sandbox execution: Alpine sandbox on this phone. Approval gates: dangerous commands ask first (existing approval flow); MCP calls are gated by toolset + per-tool toggles, not a separate per-call dialog. " +
-                "Enabled toolsets: ${rt.tools.toolsets.count { it.name !in s.disabledToolsetSet() }} of ${rt.tools.toolsets.size}.",
-                color = skin.dim, fontSize = 11.sp)
-        }
         // Task-based routing suggestion (user override wins).
         if (s.taskRouting && !vm.busy && vm.input.isNotBlank()) {
             val store = rt.modelStore
@@ -344,12 +331,12 @@ private fun HarnessControls(vm: ChatViewModel) {
                     label = { Text("Suggested model: ${suggestion.model} — use it") })
             }
         }
-        // Team mode toggle (ON by default): builder → reviewer + specialists.
+        // Team mode toggle (ON by default): chip only. The description paragraph
+        // used to sit inline here and crowded the chat; it now lives on the
+        // Settings → Agent engine toggle instead.
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilterChip(selected = s.teamMode, onClick = { s.teamMode = !s.teamMode },
-                label = { Text("Team mode") })
-            Text("  Builder → reviewer (fresh session) + planner, researcher, implementer, tester, security. Turn off for single-agent chat.",
-                color = skin.dim, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                label = { Text("Team mode", fontSize = 13.sp) })
         }
         // Morning brief: nightly-learning proposals with Approve/Reject
         // buttons per rule. Nothing here is auto-adopted.
@@ -358,14 +345,14 @@ private fun HarnessControls(vm: ChatViewModel) {
         val rulesStore = androidx.compose.runtime.remember(rulesRev) { com.ersaz.hermesmobile.agent.RulesStore(rt) }
         val proposals = androidx.compose.runtime.remember(rulesRev) { rulesStore.proposals() }
         if (proposals.isNotEmpty()) {
-            Text("Morning brief — proposed rules (approve to activate, reject to discard forever):", color = skin.title, fontSize = 12.sp)
+            Text("Morning brief — proposed rules (approve to activate, reject to discard forever):", color = skin.title, fontSize = 13.sp)
             proposals.forEachIndexed { i, p ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Text("${i + 1}. ${p.rule}", color = skin.text, fontSize = 12.5.sp)
+                    Text("${i + 1}. ${p.rule}", color = skin.text, fontSize = 13.sp)
                     Text("Why: ${p.reason}", color = skin.dim, fontSize = 11.sp)
                     Row {
-                        TextButton(onClick = { rulesStore.approve(i + 1); rulesRev++ }) { Text("Approve") }
-                        TextButton(onClick = { rulesStore.reject(i + 1); rulesRev++ }) { Text("Reject") }
+                        TextButton(onClick = { rulesStore.approve(i + 1); rulesRev++ }) { Text("Approve", fontSize = 13.sp) }
+                        TextButton(onClick = { rulesStore.reject(i + 1); rulesRev++ }) { Text("Reject", fontSize = 13.sp) }
                     }
                 }
             }
@@ -375,7 +362,7 @@ private fun HarnessControls(vm: ChatViewModel) {
             val checkpoint = androidx.compose.runtime.remember { com.ersaz.hermesmobile.agent.RunCheckpoint.load(rt) }
             if (checkpoint != null) {
                 TextButton(onClick = { vm.input = com.ersaz.hermesmobile.agent.RunCheckpoint.resumePrompt(checkpoint) }) {
-                    Text("Resume interrupted run (${checkpoint.turns} turns, summary-based — does not replay tool calls)")
+                    Text("Resume interrupted run (${checkpoint.turns} turns, summary-based — does not replay tool calls)", fontSize = 13.sp)
                 }
             }
         }
@@ -404,17 +391,18 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
                         FileChip(f) { vm.pendingFiles.removeAt(i) }
                     }
                 }
+                // 2.7.2 declutter: the "Summarize the file I attach" chip lives
+                // ONLY here, once a file is actually attached — never on the
+                // empty new session. Tapping it fills the composer, never sends.
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp, end = 8.dp)) {
+                    FilterChip(selected = false, onClick = { vm.input = "Summarize the file I attach" },
+                        label = { Text("Summarize the file I attach", fontSize = 13.sp) })
+                }
             }
-            // Spec-first toggle, ON by default (settings.specFirst): when on,
-            // build requests go through constitution → spec → plan → task
-            // checklist before implementation (see PromptBuilder); when off,
-            // chat behaves as before. Same checklist is shown in Coding.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                var specOn by remember { mutableStateOf(vm.runtime.settings.specFirst) }
-                FilterChip(selected = specOn, onClick = { specOn = !specOn; vm.runtime.settings.specFirst = specOn },
-                    label = { Text("Spec first") })
-                Text("  Engine: ${vm.runtime.settings.engine}", color = skin.dim, fontSize = 11.sp)
-            }
+            // 2.7.2 declutter: the Spec-first chip and "Engine:" label are gone
+            // from the composer row. Behaviour is unchanged — Spec-first stays
+            // ON by default (settings.specFirst, toggled in Settings → Agent
+            // engine) and the engine is chosen in the model picker sheet.
             BasicTextField(
                 value = vm.input,
                 onValueChange = { if (vm.listening || vm.transcribing) vm.pauseVoice(); vm.input = it },
@@ -435,12 +423,12 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
             if (vm.listening || vm.voicePaused) {
                 Text(
                     if (vm.listening) "Recording · Pause keeps your text" else "Paused · Tap mic to continue, or send",
-                    color = if (vm.listening) skin.error else skin.label, fontSize = 12.sp,
+                    color = if (vm.listening) skin.error else skin.label, fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
                 )
             }
             vm.voiceError?.let {
-                Text(it, color = skin.error, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                Text(it, color = skin.error, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().clickable { vm.voiceError = null }.padding(horizontal = 14.dp, vertical = 2.dp))
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -478,7 +466,7 @@ private fun LangChip(vm: ChatViewModel) {
     Text(
         vm.voiceLang.short,
         color = if (vm.listening) skin.dim else skin.label,
-        fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(skin.selection)
             .clickable(enabled = !vm.listening) { vm.cycleVoiceLang() }
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -495,10 +483,12 @@ private fun MicButton(listening: Boolean, transcribing: Boolean, onClick: () -> 
             androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = skin.accent, strokeWidth = 2.dp)
         }
     } else if (listening) {
+        // Token-only: no hardcoded white-on-red. The pulsing pause icon is the
+        // skin's own error token on the composer surface.
         Box(
-            Modifier.size(48.dp).alpha(a).clip(CircleShape).background(skin.error).clickable(onClick = onClick),
+            Modifier.size(48.dp).alpha(a).clip(CircleShape).clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.Pause, "pause dictation and keep text", tint = Color.White, modifier = Modifier.size(20.dp)) }
+        ) { Icon(Icons.Default.Pause, "pause dictation and keep text", tint = skin.error, modifier = Modifier.size(20.dp)) }
     } else {
         IconButton(onClick = onClick) { Icon(Icons.Default.Mic, "voice typing", tint = skin.label) }
     }
@@ -517,12 +507,15 @@ private fun RoundButton(
 
 @Composable
 private fun ImageChip(uri: String, onRemove: () -> Unit) {
+    val skin = LocalSkin.current
     val bmp = remember(uri) { decodeDataImage(uri) }
     Box {
         if (bmp != null) Image(bmp, null, Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
-        else Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(LocalSkin.current.selection))
-        Icon(Icons.Default.Close, "remove", tint = Color.White,
-            modifier = Modifier.align(Alignment.TopEnd).size(18.dp).clip(CircleShape).background(Color(0x99000000)).clickable(onClick = onRemove).padding(2.dp))
+        else Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(skin.selection))
+        // Token-only scrim: the skin's own background at 60% with the skin's
+        // title token on top — no hardcoded black/white.
+        Icon(Icons.Default.Close, "remove", tint = skin.title,
+            modifier = Modifier.align(Alignment.TopEnd).size(18.dp).clip(CircleShape).background(skin.bg.copy(alpha = 0.6f)).clickable(onClick = onRemove).padding(2.dp))
     }
 }
 
@@ -554,21 +547,13 @@ fun Banner(vm: ChatViewModel) {
     Column(Modifier.fillMaxWidth().padding(top = 56.dp, bottom = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(skin.symbol, color = skin.accent, fontSize = 48.sp)
         Spacer(Modifier.size(10.dp))
-        Text("How can I help?", color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
+        Text("How can I help?", color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
         Text("Type, tap the mic to dictate in Persian or English, or attach any file.",
             color = skin.dim, fontSize = 13.sp, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp, start = 24.dp, end = 24.dp))
-        Spacer(Modifier.size(22.dp))
-        listOf(
-            "Summarize the file I attach",
-            "Connect to my GitHub and list my repos",
-            "Write a Python script for this and run it",
-            "What can you do on this phone?",
-        ).forEach { prompt ->
-            Text(prompt, color = skin.text.copy(alpha = 0.9f), fontSize = 14.sp,
-                modifier = Modifier.padding(vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(skin.surface)
-                    .clickable { vm.input = prompt }.padding(horizontal = 16.dp, vertical = 10.dp))
-        }
+        // 2.7.2 declutter: no suggestion chips on the empty new session. The
+        // file-summary chip reappears contextually in the composer once a file
+        // is actually attached; the other starters live in Prompt school.
     }
 }
 
@@ -583,16 +568,16 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
             ) {
                 item.images.forEach { DataImage(it) }
                 // No fillMaxWidth: it stretched every bubble (even "hi") to the 320dp cap.
-                if (item.text.isNotBlank()) Text(item.text, color = skin.text, fontSize = 15.sp, lineHeight = 21.sp,
+                if (item.text.isNotBlank()) Text(item.text, color = skin.text, fontSize = 16.sp, lineHeight = 22.sp,
                     style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start))
                 val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
                 item.failure?.let { failure ->
-                    Text(failure, color = skin.error, fontSize = 12.sp,
+                    Text(failure, color = skin.error, fontSize = 11.sp,
                         style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start), modifier = Modifier.padding(top = 8.dp))
                 }
                 Row {
-                    TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }) { Text("Copy", fontSize = 12.sp) }
-                    if (item.failure != null) TextButton(enabled = vm.canRetry(item), onClick = { vm.retryFailed(item) }) { Text("Retry", fontSize = 12.sp) }
+                    TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(item.text)) }) { Text("Copy", fontSize = 13.sp) }
+                    if (item.failure != null) TextButton(enabled = vm.canRetry(item), onClick = { vm.retryFailed(item) }) { Text("Retry", fontSize = 13.sp) }
                 }
             }
         }
@@ -601,9 +586,9 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
                 var open by remember { mutableStateOf(false) }
                 Text(
                     (if (open) "▾ " else "▸ ") + "Thinking" + if (item.streaming && item.text.isEmpty()) "…" else "",
-                    color = skin.dim, fontSize = 12.sp, modifier = Modifier.clickable { open = !open }.padding(bottom = 4.dp),
+                    color = skin.dim, fontSize = 13.sp, modifier = Modifier.clickable { open = !open }.padding(bottom = 4.dp),
                 )
-                if (open) Text(item.reasoning, color = skin.dim, fontSize = 12.sp, lineHeight = 17.sp,
+                if (open) Text(item.reasoning, color = skin.dim, fontSize = 11.sp, lineHeight = 16.sp,
                     style = TextStyle(textDirection = TextDirection.ContentOrLtr, textAlign = TextAlign.Start),
                     modifier = Modifier.padding(start = 10.dp, bottom = 6.dp))
             }
@@ -625,10 +610,10 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
             var open by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { open = !open }.padding(vertical = 3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (item.result == null) Text("● ", color = skin.ok, fontSize = 10.sp)
-                    Text("${item.emoji}  ", fontSize = 12.sp)
-                    Text(item.name, color = skin.label, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
-                    Text("  " + item.preview, color = skin.dim, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
+                    if (item.result == null) Text("● ", color = skin.ok, fontSize = 11.sp)
+                    Text("${item.emoji}  ", fontSize = 13.sp)
+                    Text(item.name, color = skin.label, fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("  " + item.preview, color = skin.dim, fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Text(
                         item.durationMs?.let { "  ${"%.1f".format(it / 1000.0)}s" } ?: "  …",
@@ -668,7 +653,7 @@ private fun decodeDataImage(uri: String) = runCatching {
 private fun DataImage(uri: String) {
     val bmp = remember(uri) { decodeDataImage(uri) }
     if (bmp != null) Image(bmp, null, Modifier.size(200.dp).padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
-    else Text("🖼️ image", color = Color.Gray)
+    else Text("🖼️ image", color = LocalSkin.current.dim)
 }
 
 @Composable
@@ -711,8 +696,8 @@ private fun ToolGroupRow(tools: List<ChatItem.Tool>, vm: ChatViewModel) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { open = !open }.padding(vertical = 3.dp)
         .then(if (vm.runtime.settings.chatAnimations) Modifier.animateContentSize() else Modifier)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (open) "▾ " else "▸ ", color = skin.dim, fontSize = 12.sp)
-            Text("Ran ${tools.size} tools", color = skin.label, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+            Text(if (open) "▾ " else "▸ ", color = skin.dim, fontSize = 13.sp)
+            Text("Ran ${tools.size} tools", color = skin.label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Text("  ·  ${"%.1f".format(totalSec)}s total", color = skin.dim, fontSize = 11.sp,
                 modifier = Modifier.weight(1f, fill = false))
             Text(if (open) "hide" else "show", color = skin.accent, fontSize = 11.sp)
@@ -737,7 +722,7 @@ private fun ClarifyCard(vm: ChatViewModel) {
         shape = RoundedCornerShape(16.dp), color = skin.surface, shadowElevation = 2.dp,
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(req.question, color = skin.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(req.question, color = skin.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             if (req.choices.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     req.choices.forEach { c ->

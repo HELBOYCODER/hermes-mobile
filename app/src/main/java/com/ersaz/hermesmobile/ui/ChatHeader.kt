@@ -59,8 +59,16 @@ fun ChatHeader(vm: ChatViewModel, onModelPicker: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Model pill: provider label + model id, tap = model picker.
+            // ONE pill style for the whole header row: same 20dp radius, same
+            // 12x7 padding, same 13sp semibold text, same selection surface, one
+            // default font. The skin's accent appears only as the thinking
+            // pill's text color; there is no second accent anywhere on the page.
+            // Model pill: SHORT provider name + model id, tap = model picker. The full
+            // provider label (e.g. "Nous Portal (sign in — free models included)") is
+            // never shown here — the parenthetical is stripped and the pill truncates
+            // with an ellipsis, so the header stays one short row.
             val providerLabel = runCatching { Providers.byId(s.provider).label }.getOrDefault(s.provider)
+                .substringBefore(" (").trim().ifBlank { s.provider }
             val modelName = s.model.substringAfterLast('/').ifBlank { "no model" }
             Surface(
                 shape = RoundedCornerShape(20.dp), color = skin.selection,
@@ -68,26 +76,38 @@ fun ChatHeader(vm: ChatViewModel, onModelPicker: () -> Unit) {
                     .clickable(onClick = onModelPicker),
             ) {
                 Text("$providerLabel · $modelName", color = skin.title, fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold, fontFamily = skin.fontDisplay,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
             }
             // Thinking pill: visible, tappable, animated only while a turn runs.
             val thinkingLabel = thinkingLabel(s.reasoningEffort)
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = if (s.reasoningEffort.isBlank()) skin.selection else skin.accent.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(20.dp), color = skin.selection,
                 modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onModelPicker),
             ) {
-                Text("Thinking: $thinkingLabel", color = skin.accent, fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                Text("Thinking: $thinkingLabel", color = skin.accent, fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
             }
-            // Cost chip: only from the active profile's real data. No profile, or no price
-            // on it, means no chip at all — a guessed price would be a fabricated number.
+            // Cost chip: same pill style, only from the active profile's real
+            // data. No profile, or no price on it, means no chip at all — a
+            // guessed price would be a fabricated number.
             val active = remember(rev) { rt.modelStore.all().firstOrNull { rt.modelStore.isActive(it) } }
             when {
-                active?.free == true -> Text("FREE", color = skin.ok, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                !active?.priceLabel.isNullOrBlank() -> Text(active!!.priceLabel, color = skin.dim, fontSize = 11.sp)
+                active?.free == true -> Surface(
+                    shape = RoundedCornerShape(20.dp), color = skin.selection,
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)),
+                ) {
+                    Text("FREE", color = skin.ok, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                }
+                !active?.priceLabel.isNullOrBlank() -> Surface(
+                    shape = RoundedCornerShape(20.dp), color = skin.selection,
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)),
+                ) {
+                    Text(active!!.priceLabel, color = skin.dim, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                }
             }
         }
         // Context bar: tiny, and only when the session actually has token data. The number is
@@ -131,6 +151,7 @@ fun ChatHeader(vm: ChatViewModel, onModelPicker: () -> Unit) {
                             onLongClick = { rt.cronRunner.runNowAsync(imminent) },
                         ).padding(horizontal = 8.dp, vertical = 4.dp))
                     TextButton(onClick = { rt.cronRunner.runNowAsync(imminent) }) { Text("Run now", fontSize = 11.sp) }
+                    // (font sizes on this page: 16 title/input, 13 body/pills/chips, 11 meta.)
                 }
             }
         }

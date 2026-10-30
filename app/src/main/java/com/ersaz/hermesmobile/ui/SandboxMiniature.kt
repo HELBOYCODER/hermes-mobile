@@ -43,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,17 +50,20 @@ import com.ersaz.hermesmobile.ui.theme.LocalSkin
 import kotlinx.coroutines.delay
 
 /**
- * THE sandbox miniature — the circled element from the reference screenshot, in Hermes' own
- * design. It is deliberately tiny and conditional: it exists ONLY while there is live
- * sandbox/terminal activity in this session (a running process, a running terminal/coding
- * tool call, or an in-progress todo), and it disappears the moment that activity ends.
+ * THE sandbox miniature, in Hermes' own design. It is deliberately tiny and
+ * conditional: it exists ONLY while there is live sandbox/terminal activity in
+ * this session (a running process, a running terminal/coding tool call, or an
+ * in-progress todo), and it disappears the moment that activity ends.
  * It never covers the composer (it sits in the column above it, width-capped), it is
- * dismissible per activity, and tapping it opens the full Terminal view. What it shows is
- * real, read from the live process registry: the last 2 terminal lines (8 when expanded),
- * a status dot, and todo progress (completed/total) when the session has todos. Terminal
- * output is redacted exactly like the full Terminal screen (environment redaction +
- * API-key masking). Decorative animation is gated by Settings → Chat animations and is
- * paused by construction when nothing is running, since the miniature is not on screen then.
+ * dismissible per activity, and tapping it opens the full Terminal view.
+ * 2.7.2: collapsed it is ONE tiny line — status dot + short command only, no
+ * terminal output lines at all. Tapping expand reveals the output (8 lines);
+ * collapsing hides it again. What it shows is real, read from the live process
+ * registry: a status dot, todo progress (completed/total) when the session has
+ * todos, and — only when expanded — terminal output redacted exactly like the
+ * full Terminal screen (environment redaction + API-key masking). Decorative
+ * animation is gated by Settings → Chat animations and is paused by
+ * construction when nothing is running, since the miniature is not on screen then.
  */
 @Composable
 fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
@@ -102,25 +104,24 @@ fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
                 .clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpenTerminal),
         ) {
             Column(
-                Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
+                Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     .then(if (anim) Modifier.animateContentSize() else Modifier),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                // Collapsed: ONE tiny line — dot + short command only.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val dotAlpha = if (anim) {
                         val t = rememberInfiniteTransition(label = "sandbox-dot")
                         t.animateFloat(1f, 0.35f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse").value
                     } else 1f
                     Box(Modifier.size(8.dp).alpha(dotAlpha).background(skin.ok, CircleShape))
-                    Text("Sandbox", color = skin.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 8.dp))
                     val statusText = when {
-                        running != null -> "running · ${running.command.take(24)}"
+                        running != null -> "running · ${running.command.take(32)}"
                         activeTool != null -> "agent running ${activeTool.name}"
                         else -> "tasks in progress"
                     }
                     Text(statusText, color = skin.dim, fontSize = 11.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp))
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
                     if (todos.isNotEmpty()) Text("$doneTodos/${todos.size} tasks", color = skin.dim, fontSize = 11.sp)
                     IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
                         Icon(if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
@@ -130,14 +131,14 @@ fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
                         Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = skin.dim)
                     }
                 }
-                if (running != null) {
-                    val raw = rt.processes.log(running.id, if (expanded) 8 else 2).orEmpty()
+                // Terminal output ONLY when expanded — never on the collapsed line.
+                if (expanded && running != null) {
+                    val raw = rt.processes.log(running.id, 8).orEmpty()
                     val redacted = rt.settings.redactEnvironment(raw).replace(Regex("(?i)(api[_-]?key|token|secret)[=:][^\\s]+"), "$1=***")
                     Text(redacted.ifBlank { "(no output yet)" }, color = skin.text, fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace, maxLines = if (expanded) 8 else 2,
+                        fontFamily = FontFamily.Monospace, maxLines = 8,
                         overflow = TextOverflow.Ellipsis)
                 }
-                Text("Tap to open the full terminal", color = skin.label, fontSize = 10.sp)
             }
         }
     }

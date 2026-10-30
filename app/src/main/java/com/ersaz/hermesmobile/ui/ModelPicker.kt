@@ -114,6 +114,14 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                 color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
             if (rt.settings.engine == "copilot") Text("Copilot (Foundry) — remote engine, public preview. ${com.ersaz.hermesmobile.agent.CopilotHarness.BILLING_NOTE} Needs your own Foundry account (Settings → Agent engine); until its invocation surface is verified this build sends nothing to Foundry and chat runs the native engine.",
                 color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            // Run info (2.7.2: moved here from the chat body so the empty chat
+            // stays minimal — reachable by tapping the model pill). Same facts
+            // the old persistent "Run: …" line showed, nothing invented.
+            Text("Run info", color = skin.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+            Text("Engine: ${rt.settings.engine} · Provider: ${rt.settings.provider} · Model: ${rt.settings.model.ifBlank { "no model" }} · Thinking: ${thinkingLabel(rt.settings.reasoningEffort)} · Spec-first ${if (rt.settings.specFirst) "ON" else "OFF"} · Task routing ${if (rt.settings.taskRouting) "ON" else "OFF"} · Enabled toolsets: ${rt.tools.toolsets.count { it.name !in rt.settings.disabledToolsetSet() }} of ${rt.tools.toolsets.size}. Sandbox: Alpine sandbox on this phone; dangerous commands ask first; MCP calls are gated by toolset + per-tool toggles.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            if (rt.settings.engine == "copilot") Text("Copilot (Foundry) is a remote stub in this build — nothing is sent to Foundry; this chat runs the native engine.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
             // Prompting Claude Opus card (Hermes' own summary, not copied
             // text): shown when the current model is Opus-family.
             if (rt.settings.model.contains("opus", ignoreCase = true)) {
