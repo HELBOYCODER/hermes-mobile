@@ -39,7 +39,7 @@ fun DesignWorkspacePanel(rt: HermesRuntime, vm: ChatViewModel, onNavigate: (Stri
     Text("Browse the component library in Hermes' Browser (your own uberdesigner.ai free/Pro account — Hermes never stores those credentials and never bypasses the service's 3 templates/day free limit or its Pro paywall), copy a prompt, and paste it below. Hermes implements it with its own design pipeline (Huashu flow, React Bits web components, GSAP, UI UX Pro Max palettes/fonts).",
         color = skin.dim, fontSize = 12.sp)
     OutlinedButton(onClick = {
-        rt.browser.url = "https://uberdesigner.ai"
+        scope.launch { rt.browser.newTab("https://uberdesigner.ai") }
         onNavigate("Browser")
     }) { Text("Browse component library (uberdesigner.ai)") }
     var pasted by remember { mutableStateOf("") }

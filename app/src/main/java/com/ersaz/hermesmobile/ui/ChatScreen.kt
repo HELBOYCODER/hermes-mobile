@@ -442,6 +442,7 @@ private fun HarnessControls(vm: ChatViewModel) {
     }
 }
 
+@Composable
 private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit, onMic: () -> Unit) {
     val skin = LocalSkin.current
     var menu by remember { mutableStateOf(false) }

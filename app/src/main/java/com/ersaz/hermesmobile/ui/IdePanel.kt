@@ -143,7 +143,7 @@ fun IdePanel(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNavigat
         tree.forEach { (file, depth) ->
             Row(Modifier.fillMaxWidth().clickable {
                 if (file.isFile && file.length() < 500_000) { editing = file; editText = runCatching { file.readText() }.getOrDefault("") }
-            }.padding(start = (depth * 14).dp, vertical = 3.dp)) {
+            }.padding(start = (depth * 14).dp).padding(vertical = 3.dp)) {
                 Text(if (file.isDirectory) "📁 " else "📄 ", fontSize = 13.sp)
                 Text(file.name, color = skin.text, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp)
             }
@@ -229,7 +229,7 @@ fun IdePanel(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNavigat
             scope.launch {
                 val thinking = com.ersaz.hermesmobile.agent.PiHarness.mapThinking(rt.settings.reasoningEffort)
                 val r = runCatching {
-                    com.ersaz.hermesmobile.agent.PiHarness.runPrint(
+                    com.ersaz.hermesmobile.agent.PiRunner(rt).runPrint(
                         "Work in this project. Read SPEC.md first if it exists, then follow the user's current task.",
                         project, rt.settings.model, thinking)
                 }.getOrNull()

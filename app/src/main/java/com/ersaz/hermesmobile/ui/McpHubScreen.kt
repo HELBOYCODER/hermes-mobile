@@ -175,8 +175,10 @@ private fun importHubJson(rt: HermesRuntime, raw: String): Pair<List<String>, Li
     val root = runCatching { JSONObject(raw.trim()) }.getOrNull() ?: return emptyList<String>() to listOf("invalid JSON")
     val container = root.optJSONObject("mcpServers") ?: root.optJSONObject("servers") ?: root
     for (key in container.keys()) {
-        val obj = container.optJSONObject(key) ?: run { skipped += key; continue }
-        val server = McpServer.fromJson(key, obj) ?: run { skipped += key; continue }
+        val obj = container.optJSONObject(key)
+        if (obj == null) { skipped += key; continue }
+        val server = McpServer.fromJson(key, obj)
+        if (server == null) { skipped += key; continue }
         if (rt.mcp.store.get(server.id) != null) { skipped += "$key (duplicate)"; continue }
         rt.mcp.store.upsert(server.copy(enabled = false, autoStart = false, builtin = false))
         imported += key

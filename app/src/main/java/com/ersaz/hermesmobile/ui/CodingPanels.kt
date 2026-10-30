@@ -153,7 +153,7 @@ fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNav
                     // DeepSeek (or any) model selected in Hermes is passed
                     // through to Pi; Pi must itself be configured for that
                     // provider, otherwise the run fails honestly (see above).
-                    val out = com.ersaz.hermesmobile.agent.PiRunner(rt).runPrint(piTask, rt.sandbox.guestPath(root.absolutePath), rt.settings.model, thinking)
+                    val out = com.ersaz.hermesmobile.agent.PiRunner(rt).runPrint(piTask, rt.sandbox.guestPath(root), rt.settings.model, thinking)
                     piOut = out ?: "Pi harness not installed — falling back to native Hermes. Install it in Settings → Agent engine, or send this task in chat (native engine)."
                     if (out == null) { vm.input = piTask; onChat() }
                 } catch (e: Exception) { piOut = "Pi run failed: ${e.message}. Falling back to native Hermes." }

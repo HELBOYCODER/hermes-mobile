@@ -191,7 +191,6 @@ fun sourceIcon(source: String) = when (source) {
 
 // ------------------------------------------------------------------ skills
 
-@Composable
 /** Resolves a user-pasted skill reference to a raw SKILL.md URL. */
 private fun resolveSkillUrl(input: String): String {
     if (input.startsWith("https://raw.githubusercontent.com/")) return input
@@ -229,6 +228,7 @@ private fun parseSkillFrontmatter(body: String): Map<String, String> {
     return out
 }
 
+@Composable
 fun SkillsScreen(rt: HermesRuntime, vm: ChatViewModel, open: () -> Unit) {
     val skin = LocalSkin.current
     var refresh by remember { mutableIntStateOf(0) }
