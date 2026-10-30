@@ -1,6 +1,7 @@
 package com.ersaz.hermesmobile.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ersaz.hermesmobile.HermesRuntime
 import com.ersaz.hermesmobile.core.ModelProfile
+import com.ersaz.hermesmobile.llm.LlmClient
+import com.ersaz.hermesmobile.llm.ModelCatalog
 import com.ersaz.hermesmobile.llm.ModelInfo
 import com.ersaz.hermesmobile.llm.Providers
 import com.ersaz.hermesmobile.ui.theme.LocalSkin
@@ -65,6 +68,7 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
     var msg by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
+    var addingProvider by remember { mutableStateOf(false) }
     var connectingZen by remember { mutableStateOf(false) }
     remember { store.ensureCurrent(Providers.byId(rt.settings.provider).label); 0 }
 
@@ -81,15 +85,74 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = skin.surface) {
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text("Models", color = skin.title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            // Thinking level, in Hermes' own skin: the same reasoningEffort
+            // setting the agent already sends (Agent → LlmClient), exposed
+            // here next to model selection instead of buried in Settings.
+            // Soft, rounded chips — Hermes' own design system, not another app's UI.
+            Text("Thinking", color = skin.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                listOf("" to "Default", "none" to "None", "low" to "Low", "medium" to "Medium", "high" to "High", "xhigh" to "XHigh", "max" to "Max").forEach { (value, label) ->
+                    FilterChip(
+                        selected = rt.settings.reasoningEffort == value,
+                        onClick = { rt.settings.reasoningEffort = value; rev++ },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            // Engine selector (same area as model selection): Hermes native
+            // (default), Pi harness, or Copilot (Foundry, remote). Pi runs
+            // only if installed; Copilot is a stub until its Foundry
+            // invocation surface is verified — selecting it falls back to
+            // native, never a fake Copilot run (see CopilotHarness).
+            Text("Engine", color = skin.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                FilterChip(selected = rt.settings.engine == "native", onClick = { rt.settings.engine = "native"; rev++ }, label = { Text("Hermes native") })
+                FilterChip(selected = rt.settings.engine == "pi", onClick = { rt.settings.engine = "pi"; rev++ }, label = { Text("Pi harness") })
+                FilterChip(selected = rt.settings.engine == "copilot", onClick = { rt.settings.engine = "copilot"; rev++ }, label = { Text("Copilot (Foundry)") })
+            }
+            if (rt.settings.engine == "pi") Text("Pi harness runs in the sandbox via the pi CLI. Install/check it in Settings → Agent engine; if it is not installed, chat falls back to native.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            if (rt.settings.engine == "copilot") Text("Copilot (Foundry) — remote engine, public preview. ${com.ersaz.hermesmobile.agent.CopilotHarness.BILLING_NOTE} Needs your own Foundry account (Settings → Agent engine); until its invocation surface is verified this build sends nothing to Foundry and chat runs the native engine.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            // Run info (2.7.2: moved here from the chat body so the empty chat
+            // stays minimal — reachable by tapping the model pill). Same facts
+            // the old persistent "Run: …" line showed, nothing invented.
+            Text("Run info", color = skin.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+            Text("Engine: ${rt.settings.engine} · Provider: ${rt.settings.provider} · Model: ${rt.settings.model.ifBlank { "no model" }} · Thinking: ${thinkingLabel(rt.settings.reasoningEffort)} · Spec-first ${if (rt.settings.specFirst) "ON" else "OFF"} · Task routing ${if (rt.settings.taskRouting) "ON" else "OFF"} · Enabled toolsets: ${rt.tools.toolsets.count { it.name !in rt.settings.disabledToolsetSet() }} of ${rt.tools.toolsets.size}. Sandbox: Alpine sandbox on this phone; dangerous commands ask first; MCP calls are gated by toolset + per-tool toggles.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            if (rt.settings.engine == "copilot") Text("Copilot (Foundry) is a remote stub in this build — nothing is sent to Foundry; this chat runs the native engine.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+            // Prompting Claude Opus card (Hermes' own summary, not copied
+            // text): shown when the current model is Opus-family.
+            if (rt.settings.model.contains("opus", ignoreCase = true)) {
+                Text("Prompting Claude Opus — Hermes summary", color = skin.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                Text("Opus reasons best with room to think: give it the full context up front, ask for step-by-step reasoning before the answer on hard tasks, use extended thinking for multi-step work, be explicit about the output shape, and ask it to verify its answer against the input. Official guidance: docs.anthropic.com (Anthropic docs, linked — not copied here).",
+                    color = skin.dim, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))
+            }
             OutlinedTextField(query, { query = it }, singleLine = true, label = { Text("Search models or providers") },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(selected = !freeOnly, onClick = { freeOnly = false }, label = { Text("All") })
                 FilterChip(selected = freeOnly, onClick = { freeOnly = true }, label = { Text("Free") })
             }
-            if (list.isEmpty()) Text("No models yet. Fetch the current provider's list or add one.", color = skin.dim, fontSize = 13.sp,
+            if (list.isEmpty()) Text(if (freeOnly) "No free models listed. If you use 9Router, open the 9Router screen and tap Refresh free models — OpenCode free models appear there first, never here by guesswork." else "No models yet. Fetch the current provider's list or add one.", color = skin.dim, fontSize = 13.sp,
                 modifier = Modifier.padding(vertical = 12.dp))
-            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+            // "Show current model" jump: flat index in the header-interleaved list (headers count).
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val activeFlatIndex = remember(list) {
+                var idx = 0; var last = ""; var found = -1
+                for (p in list) {
+                    if (p.label != last) { last = p.label; idx++ }
+                    if (store.isActive(p)) { found = idx; break }
+                    idx++
+                }
+                found
+            }
+            if (list.isNotEmpty() && activeFlatIndex >= 0) {
+                TextButton(onClick = { scope.launch { listState.scrollToItem(activeFlatIndex) } },
+                    modifier = Modifier.padding(bottom = 2.dp)) { Text("Show current model", fontSize = 12.sp) }
+            }
+            LazyColumn(Modifier.heightIn(max = 420.dp), state = listState) {
                 var last = ""
                 list.forEach { p ->
                     if (p.label != last) { last = p.label; item(key = "h_" + p.label) { Text(p.label, color = skin.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp)) } }
@@ -138,6 +201,7 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                     }
                 }) { Text("Fetch from provider") }
                 OutlinedButton(onClick = { adding = true }) { Text("Add model") }
+                OutlinedButton(onClick = { addingProvider = true }) { Text("Add provider") }
                 OutlinedButton(onClick = { connectingZen = true }) { Text("OpenCode Zen") }
             }
             Spacer(Modifier.size(20.dp))
@@ -157,6 +221,9 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
         },
     )
     if (adding) AddModelDialog(onDismiss = { adding = false }) { p -> store.upsert(p); store.select(p); vm.modelChanged(); adding = false; onDismiss() }
+    if (addingProvider) AddProviderDialog(rt, onDismiss = { addingProvider = false }) { p ->
+        store.select(p); vm.modelChanged(); addingProvider = false; rev++; onDismiss()
+    }
 }
 
 @Composable
@@ -182,6 +249,109 @@ private fun AddModelDialog(onDismiss: () -> Unit, onAdd: (ModelProfile) -> Unit)
             }) { Text("Add & use") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Add an OpenAI-compatible provider with the user's OWN account and key.
+ * Presets only fill the backend URL — z.ai, OpenRouter, or a free-form
+ * custom URL (e.g. the user's own cline2api-style bridge). There is no
+ * provider login/OAuth flow here, no shared account, no extracted tokens
+ * and no hardcoded key, and no affiliation with any provider is claimed.
+ * "Fetch models" calls GET <baseUrl>/models with the user's key, parses
+ * with the existing ModelCatalog, stores via modelStore.replaceSource with
+ * a per-provider source id, and lists free models first (freeAgentModels).
+ * Keys are stored the same way as every existing provider key: in the
+ * app-private model-profile list in SharedPreferences (not encrypted at
+ * rest — the same limitation as the existing providers). The key is only
+ * ever sent to the backend URL the user entered.
+ */
+@Composable
+private fun AddProviderDialog(rt: HermesRuntime, onDismiss: () -> Unit, onPick: (ModelProfile) -> Unit) {
+    var preset by remember { mutableStateOf("zai") }
+    var name by remember { mutableStateOf("Z.ai") }
+    var url by remember { mutableStateOf("https://api.z.ai/api/paas/v4") }
+    var key by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var fetched by remember { mutableStateOf<List<ModelProfile>>(emptyList()) }
+    val scope = rememberCoroutineScope()
+    // Presets only fill the backend URL; the user always enters their own
+    // key. DeepSeek, Gemini, Mistral and Groq are OpenAI-compatible presets
+    // already in Providers; z.ai stays API-key only (its account-login flow
+    // for third-party apps is unverified, so no z.ai login is implemented).
+    val presets = listOf(
+        Triple("zai", "Z.ai", "https://api.z.ai/api/paas/v4"),
+        Triple("openrouter", "OpenRouter", "https://openrouter.ai/api/v1"),
+        Triple("deepseek", "DeepSeek", "https://api.deepseek.com/v1"),
+        Triple("gemini", "Gemini", "https://generativelanguage.googleapis.com/v1beta/openai"),
+        Triple("mistral", "Mistral", "https://api.mistral.ai/v1"),
+        Triple("groq", "Groq", "https://api.groq.com/openai/v1"),
+        Triple("custom", "Custom", ""),
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add provider (your own account)") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Presets only fill the backend URL. Enter your own API key for that provider; free models shown are the ones your key can actually list. Z.ai account login is not implemented (unverified for third-party apps) — use a Z.ai API key from the official Z.ai developer console.")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    presets.forEach { (id, label, presetUrl) ->
+                        FilterChip(selected = preset == id, onClick = {
+                            preset = id; name = label
+                            if (presetUrl.isNotBlank()) url = presetUrl
+                        }, label = { Text(label) })
+                    }
+                }
+                Field("Provider name", name) { name = it }
+                Field("Backend base URL (…/v1 or provider path)", url) { url = it.trim() }
+                Field("Your API key", key, secret = true) { key = it.trim() }
+                Text("Your key stays in this app's private settings, like other provider keys, and is only sent to the URL above.",
+                    color = LocalSkin.current.dim, fontSize = 11.sp)
+                if (msg.isNotBlank()) Text(msg, color = LocalSkin.current.label, fontSize = 12.sp)
+                if (fetched.isNotEmpty()) {
+                    Text("Fetched models — free first. Tap one to use it:", color = LocalSkin.current.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 260.dp)) {
+                        items(fetched.size) { i ->
+                            val p = fetched[i]
+                            Row(Modifier.fillMaxWidth().clickable { onPick(p) }.padding(vertical = 6.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.model, color = LocalSkin.current.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(if (p.free) "FREE" else p.priceLabel.ifBlank { "Pricing not listed" },
+                                        color = if (p.free) LocalSkin.current.ok else LocalSkin.current.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !busy && url.isNotBlank() && key.isNotBlank(), onClick = {
+                busy = true; msg = "Fetching models…"
+                scope.launch {
+                    try {
+                        val base = url.trimEnd('/')
+                        val models = LlmClient(rt.http, base, key, preset).listModelInfo()
+                        if (models.isEmpty()) { msg = "That backend returned no models for this key."; fetched = emptyList() }
+                        else {
+                            val source = "provider:$preset"
+                            val ordered = ModelCatalog.freeAgentModels(models) + models.filter { it !in ModelCatalog.freeAgentModels(models) }
+                            val profiles = ordered.map {
+                                ModelProfile(name.ifBlank { preset }, preset, base, key, it.id, it.free, source, it.priceLabel())
+                            }
+                            rt.modelStore.replaceSource(source, profiles)
+                            fetched = profiles
+                            val freeCount = profiles.count { it.free }
+                            msg = "Loaded ${models.size} models ($freeCount free, shown first)."
+                        }
+                    } catch (e: Exception) {
+                        msg = "Could not fetch: ${e.message}"
+                    } finally { busy = false }
+                }
+            }) { Text(if (busy) "Fetching…" else "Fetch models") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
 }
 

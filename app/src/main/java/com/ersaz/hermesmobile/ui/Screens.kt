@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +38,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -186,13 +191,106 @@ fun sourceIcon(source: String) = when (source) {
 
 // ------------------------------------------------------------------ skills
 
+/** Resolves a user-pasted skill reference to a raw SKILL.md URL. */
+private fun resolveSkillUrl(input: String): String {
+    if (input.startsWith("https://raw.githubusercontent.com/")) return input
+    if (input.startsWith("https://github.com/")) {
+        // https://github.com/owner/repo/blob/<branch>/path/SKILL.md
+        val rest = input.removePrefix("https://github.com/")
+        val blob = rest.indexOf("/blob/")
+        if (blob > 0) {
+            val head = rest.substring(0, blob)
+            val tail = rest.substring(blob + "/blob/".length)
+            return "https://raw.githubusercontent.com/$head/$tail"
+        }
+    }
+    // ECC shorthand: ecc:<name> → the canonical .agents/skills entry.
+    val ecc = Regex("^ecc:([A-Za-z0-9_.-]+)$").matchEntire(input)
+    if (ecc != null) return "https://raw.githubusercontent.com/affaan-m/ECC/main/.agents/skills/${ecc.groupValues[1]}/SKILL.md"
+    val shorthand = Regex("^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+)$").matchEntire(input)
+    if (shorthand != null) {
+        val (owner, repo, name) = shorthand.destructured
+        return "https://raw.githubusercontent.com/$owner/$repo/main/skills/$name/SKILL.md"
+    }
+    return input
+}
+
+/** Minimal frontmatter parse (name/description only, for validation). */
+private fun parseSkillFrontmatter(body: String): Map<String, String> {
+    val lines = body.lines()
+    if (lines.firstOrNull()?.trim() != "---") return emptyMap()
+    val out = mutableMapOf<String, String>()
+    for (line in lines.drop(1)) {
+        if (line.trim() == "---") break
+        val i = line.indexOf(':')
+        if (i > 0) out[line.substring(0, i).trim().lowercase()] = line.substring(i + 1).trim().trim('"', '\'')
+    }
+    return out
+}
+
 @Composable
 fun SkillsScreen(rt: HermesRuntime, vm: ChatViewModel, open: () -> Unit) {
     val skin = LocalSkin.current
     var refresh by remember { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf<com.ersaz.hermesmobile.agent.SkillStore.Skill?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var importing by remember { mutableStateOf(false) }
+    var importUrl by remember { mutableStateOf("") }
+    var importMsg by remember { mutableStateOf("") }
+    var importBusy by remember { mutableStateOf(false) }
     val skills = remember(refresh) { rt.skills.list() }
+    val scope = rememberCoroutineScope()
+
+    // Anthropic skill format, compatible by design: Hermes skills are
+    // already one folder + one SKILL.md + YAML frontmatter (name,
+    // description) — exactly the Anthropic format. This import fetches
+    // a SKILL.md from a URL the user pastes (raw URL, github blob URL,
+    // or owner/repo:skill-name shorthand for the anthropics/skills
+    // repo), validates its frontmatter, and lists it like any bundled
+    // skill. Nothing is bundled from that repo (it shows no license).
+    // Limitation: only SKILL.md is fetched; references/, scripts/ and
+    // assets/ under the skill folder are NOT fetched — a skill that
+    // needs them will say so when loaded.
+    if (importing) AlertDialog(
+        onDismissRequest = { if (!importBusy) importing = false },
+        title = { Text("Import Anthropic skill") },
+        text = {
+            Column {
+                Text("Paste a raw SKILL.md URL, a github.com blob URL, or owner/repo:skill-name (e.g. anthropics/skills:pdf). Format: one folder + one SKILL.md + frontmatter (name, description) — the same format Hermes already uses. Only SKILL.md is fetched; references/scripts/assets are not.", color = skin.label, fontSize = 12.5.sp)
+                OutlinedTextField(importUrl, { importUrl = it }, singleLine = true, label = { Text("Skill URL or owner/repo:name") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (importMsg.isNotBlank()) Text(importMsg, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !importBusy && importUrl.isNotBlank(), onClick = {
+                importBusy = true; importMsg = "Fetching…"
+                scope.launch {
+                    importMsg = try {
+                        val resolved = resolveSkillUrl(importUrl.trim())
+                        val body = withContext(Dispatchers.IO) {
+                            val client = okhttp3.OkHttpClient()
+                            val req = okhttp3.Request.Builder().url(resolved).build()
+                            client.newCall(req).execute().use { resp ->
+                                if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
+                                resp.body?.string() ?: throw IllegalStateException("empty response")
+                            }
+                        }
+                        val fm = parseSkillFrontmatter(body)
+                        val name = fm["name"]?.trim().orEmpty()
+                        val desc = fm["description"]?.trim().orEmpty()
+                        if (name.isBlank() || desc.isBlank()) throw IllegalStateException("No valid frontmatter (name + description required) — not an Anthropic-format skill.")
+                        val safe = name.lowercase().replace(Regex("[^a-z0-9_-]+"), "-").trim('-').ifBlank { "imported-skill" }
+                        val dir = java.io.File(rt.skills.dir, safe).also { it.mkdirs() }
+                        java.io.File(dir, "SKILL.md").writeText(body)
+                        refresh++
+                        "Imported \"$name\" — it now lists like any bundled skill."
+                    } catch (e: Exception) { "Import failed: ${e.message}" }
+                    importBusy = false
+                }
+            }) { Text(if (importBusy) "Fetching…" else "Fetch") }
+        },
+        dismissButton = { TextButton(enabled = !importBusy, onClick = { importing = false }) { Text("Close") } },
+    )
 
     editing?.let { s ->
         var text by remember(s) { mutableStateOf(s.file.readText()) }
@@ -205,6 +303,9 @@ fun SkillsScreen(rt: HermesRuntime, vm: ChatViewModel, open: () -> Unit) {
                 OutlinedButton(onClick = { editing = null }) { Text("Cancel") }
                 TextButton(onClick = { rt.skills.delete(s); editing = null; refresh++ }) { Text("Delete", color = skin.error) }
             }
+            // Huashu only: on-demand download of the heavy assets that
+            // are deliberately not bundled in the APK (see HuashuDownload).
+            if (s.name == "huashu-design") HuashuDownloadRow(rt, s)
         }
         return
     }
@@ -227,10 +328,11 @@ fun SkillsScreen(rt: HermesRuntime, vm: ChatViewModel, open: () -> Unit) {
 
     LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
         item {
-            Hint("Skills are Hermes' procedural memory (SKILL.md in ~/.hermes/skills). The agent creates and improves them as it works; tap ▶ to invoke one as /<name>.")
+            Hint("Skills are Hermes' procedural memory (SKILL.md in ~/.hermes/skills). The agent creates and improves them as it works; tap ▶ to invoke one as /<name>. Anthropic-format skills (one folder + one SKILL.md + frontmatter) work as-is — use Import to fetch one by URL.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { creating = true }) { Text("＋ New skill") }
                 OutlinedButton(onClick = { vm.input = "/learn "; open() }) { Text("/learn …") }
+                OutlinedButton(onClick = { importing = true; importMsg = "" }) { Text("Import Anthropic skill") }
             }
         }
         skills.groupBy { it.category }.forEach { (cat, list) ->

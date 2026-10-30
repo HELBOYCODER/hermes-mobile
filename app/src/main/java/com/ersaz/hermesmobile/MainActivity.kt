@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.AccountTree
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
@@ -59,6 +61,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import com.ersaz.hermesmobile.ui.PromptSchoolScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,9 +81,10 @@ import com.ersaz.hermesmobile.ui.ChatScreen
 import com.ersaz.hermesmobile.ui.ChatViewModel
 import com.ersaz.hermesmobile.ui.CronScreen
 import com.ersaz.hermesmobile.ui.GatewayScreen
-import com.ersaz.hermesmobile.ui.McpScreen
+import com.ersaz.hermesmobile.ui.McpHubScreen
 import com.ersaz.hermesmobile.ui.MemoryScreen
 import com.ersaz.hermesmobile.ui.OnboardingScreen
+import com.ersaz.hermesmobile.ui.RouterScreen
 import com.ersaz.hermesmobile.ui.SessionsScreen
 import com.ersaz.hermesmobile.ui.SettingsScreen
 import com.ersaz.hermesmobile.ui.SkillsScreen
@@ -107,13 +111,15 @@ enum class Dest(val title: String, val icon: ImageVector) {
     Cron("Scheduled tasks", Icons.Default.Schedule),
     Browser("Browser", Icons.Default.Public),
     SubAgents("Sub-agents", Icons.Default.AccountTree),
-    Mcp("MCP servers", Icons.Default.Extension),
+    Mcp("MCP Hub", Icons.Filled.Extension),
     Gateway("Messaging gateway", Icons.Default.Hub),
+    Router("9Router", Icons.Default.Hub),
     WebUi("Remote WebUI", Icons.Default.Language),
     Files("Files", Icons.Default.Folder),
     Usage("Usage stats", Icons.Default.BarChart),
     Logs("Logs", Icons.Default.BugReport),
     Settings("Settings", Icons.Default.Settings),
+    Learn("Prompt school", Icons.Filled.School),
 }
 
 class MainActivity : ComponentActivity() {
@@ -229,8 +235,9 @@ class MainActivity : ComponentActivity() {
                                 Spacer(Modifier.height(10.dp))
                                 val groups = linkedMapOf(
                                     "Conversations" to listOf(Dest.Chat, Dest.Sessions, Dest.Bots),
-                                    "Development" to listOf(Dest.Coding),
-                                    "App" to listOf(Dest.Settings),
+                                    "AI router" to listOf(Dest.Router),
+                                    "Development" to listOf(Dest.Coding, Dest.Mcp),
+                                    "App" to listOf(Dest.Settings, Dest.Learn),
                                 )
                                 groups.forEach { (label, destinations) ->
                                     Text(label, color = skin.dim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
@@ -259,8 +266,19 @@ class MainActivity : ComponentActivity() {
                                         color = skin.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 },
-                                navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.label) } },
+                                // Every section gets an explicit Back action (in addition to the
+                                // system BackHandler): on Chat it is the drawer menu, elsewhere it
+                                // follows the same goBack() history. The drawer stays reachable
+                                // on non-Chat screens via the menu action below.
+                                navigationIcon = {
+                                    if (dest == Dest.Chat) {
+                                        IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.label) }
+                                    } else {
+                                        IconButton(onClick = { goBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "back", tint = skin.label) }
+                                    }
+                                },
                                 actions = {
+                                    if (dest != Dest.Chat) IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "menu", tint = skin.label) }
                                     if (dest == Dest.Chat) {
                                         var clear by androidx.compose.runtime.remember { mutableStateOf(false) }
                                         com.ersaz.hermesmobile.ui.ChatSessionMenu { action ->
@@ -304,13 +322,15 @@ class MainActivity : ComponentActivity() {
                                 Dest.Cron -> CronScreen(rt)
                                 Dest.Browser -> BrowserScreen(rt, onExit = { goBack() })
                                 Dest.SubAgents -> SubAgentsScreen(rt)
-                                Dest.Mcp -> McpScreen(rt)
+                                Dest.Mcp -> McpHubScreen(rt)
                                 Dest.Gateway -> GatewayScreen(rt)
+                                Dest.Router -> RouterScreen(rt)
                                 Dest.WebUi -> WebUiScreen(rt)
                                 Dest.Files -> FilesScreen(rt)
                                 Dest.Usage -> UsageScreen(rt)
                                 Dest.Logs -> LogsScreen(rt)
                                 Dest.Coding -> com.ersaz.hermesmobile.ui.CodingScreen(rt, vm, onChat = { navigate(Dest.Chat) }, onNavigate = { route -> Dest.entries.firstOrNull { it.name == route }?.let { navigate(it) } })
+                                Dest.Learn -> PromptSchoolScreen(rt, vm) { navigate(Dest.Chat) }
                                 Dest.Settings -> SettingsScreen(rt) { route ->
                                     if (route == "Recovery") startActivity(android.content.Intent(this@MainActivity, RecoveryActivity::class.java))
                                     else Dest.entries.firstOrNull { it.name == route }?.let { navigate(it) }

@@ -10,6 +10,12 @@ import java.net.URI
  * [command] run inside the Linux sandbox (stdio). Serialized in the Claude-Desktop `mcpServers` format, with
  * `enabled`, `note` and `type` as extras, so configs can be pasted in and out and edited from the shell.
  */
+/**
+ * MCP Hub registry fields. The Claude-Desktop core (url/headers/command/
+ * args/env/enabled/transport) is unchanged so configs stay paste-compatible;
+ * the Hub extras below round-trip through the same servers.json and are
+ * ignored by other Claude-format readers.
+ */
 data class McpServer(
     val id: String,
     var url: String? = null,
@@ -24,9 +30,28 @@ data class McpServer(
     /** Optional pre-registered OAuth client for servers without dynamic registration. */
     var oauthClientId: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Hub: display name (defaults to id). */
+    var displayName: String = "",
+    /** Hub: stdio working directory inside the sandbox guest (default /root). */
+    var cwd: String = "/root",
+    /** Hub: connect at startup. ON for bundled servers; OFF for custom
+     *  entries until their first successful test (the Hub flips it on). */
+    var autoStart: Boolean = true,
+    /** Hub: true for the bundled defaults (never re-seeded over user edits). */
+    var builtin: Boolean = false,
+    /** Hub: per-tool gating. Empty allowlist = all tools allowed, minus denylist. */
+    var allowedTools: Set<String> = emptySet(),
+    var deniedTools: Set<String> = emptySet(),
+    /** Hub: JSON-RPC timeout in seconds; 0 = the transport default. */
+    var timeoutSec: Int = 0,
+    /** Hub: last connection error text (live health lives in McpManager.status). */
+    var lastError: String = "",
 ) {
     val isStdio: Boolean get() = !command.isNullOrBlank()
     val summary: String get() = if (isStdio) (listOf(command!!) + args).joinToString(" ") else url.orEmpty()
+    val name: String get() = displayName.ifBlank { id }
+    /** Transport badge for the Hub list (stdio | sse | http | auto). */
+    val transportBadge: String get() = if (isStdio) "stdio" else transport
 
     fun toJson(): JSONObject = JSONObject().apply {
         if (isStdio) {
@@ -41,6 +66,15 @@ data class McpServer(
         if (note.isNotBlank()) put("note", note)
         oauthClientId?.let { put("oauth", JSONObject().put("clientId", it)) }
         put("createdAt", createdAt)
+        // Hub extras (only when non-default, to keep the file readable).
+        if (displayName.isNotBlank() && displayName != id) put("displayName", displayName)
+        if (cwd.isNotBlank() && cwd != "/root") put("cwd", cwd)
+        if (!autoStart) put("autoStart", false)
+        if (builtin) put("builtin", true)
+        if (allowedTools.isNotEmpty()) put("allowedTools", JSONArray(allowedTools.sorted()))
+        if (deniedTools.isNotEmpty()) put("deniedTools", JSONArray(deniedTools.sorted()))
+        if (timeoutSec > 0) put("timeoutSec", timeoutSec)
+        if (lastError.isNotBlank()) put("lastError", lastError)
     }
 
     companion object {
@@ -50,6 +84,7 @@ data class McpServer(
             if (url == null && command == null) return null
             fun strMap(k: String) = o.optJSONObject(k)?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap()
             val type = o.optString("type").lowercase()
+            fun strSet(k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.toSet() } ?: emptySet()
             return McpServer(
                 id = id, url = url, headers = strMap("headers"), command = command,
                 args = o.optJSONArray("args")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
@@ -59,6 +94,14 @@ data class McpServer(
                 transport = when { type == "sse" -> "sse"; type in setOf("http", "streamable-http", "streamablehttp") -> "http"; else -> "auto" },
                 oauthClientId = o.optJSONObject("oauth")?.optString("clientId")?.ifBlank { null },
                 createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+                displayName = o.optString("displayName"),
+                cwd = o.optString("cwd").ifBlank { "/root" },
+                autoStart = if (o.has("autoStart")) o.optBoolean("autoStart", true) else true,
+                builtin = o.optBoolean("builtin", false),
+                allowedTools = strSet("allowedTools"),
+                deniedTools = strSet("deniedTools"),
+                timeoutSec = o.optInt("timeoutSec", 0).coerceAtLeast(0),
+                lastError = o.optString("lastError"),
             )
         }
     }

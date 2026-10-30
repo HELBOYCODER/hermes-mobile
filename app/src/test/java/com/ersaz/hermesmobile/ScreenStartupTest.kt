@@ -6,7 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.test.core.app.ApplicationProvider
 import com.ersaz.hermesmobile.coding.CodingDefaults
-import com.ersaz.hermesmobile.ui.McpScreen
+import com.ersaz.hermesmobile.ui.McpHubScreen
 import com.ersaz.hermesmobile.ui.SettingsHub
 import com.ersaz.hermesmobile.ui.theme.HermesTheme
 import com.ersaz.hermesmobile.ui.theme.Skins
@@ -23,7 +23,10 @@ import org.robolectric.annotation.LooperMode
 class ScreenStartupTest {
     @get:Rule val compose = createComposeRule()
     @Test fun settingsHubOpens() {
-        compose.setContent { HermesTheme(Skins.all.first()) { SettingsHub({}, {}) } }
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        application.applicationInfo.nativeLibraryDir = application.filesDir.absolutePath
+        val rt = HermesRuntime(application)
+        compose.setContent { HermesTheme(Skins.all.first()) { SettingsHub(rt, {}, {}) } }
         compose.onNodeWithText("Make Hermes yours").assertIsDisplayed()
     }
     @Test fun mcpPageOpensWithBundledServers() {
@@ -31,7 +34,7 @@ class ScreenStartupTest {
         application.applicationInfo.nativeLibraryDir = application.filesDir.absolutePath
         val rt = HermesRuntime(application)
         (listOf(CodingDefaults.server().copy(enabled = false)) + CodingDefaults.optionalServers()).forEach { rt.mcp.store.upsert(it) }
-        compose.setContent { HermesTheme(Skins.all.first()) { McpScreen(rt) } }
-        compose.onNodeWithText("Coding integrations").assertIsDisplayed()
+        compose.setContent { HermesTheme(Skins.all.first()) { McpHubScreen(rt) } }
+        compose.onNodeWithText("MCP Hub").assertIsDisplayed()
     }
 }

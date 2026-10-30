@@ -108,6 +108,45 @@ class HermesRuntime(val app: Application) {
             runCatching { com.ersaz.hermesmobile.sandbox.GitHubLink.apply(sandbox, settings) }
             runCatching { com.ersaz.hermesmobile.coding.CodingPack.install(this@HermesRuntime) }
                 .onFailure { log.e("coding", "Coding tools setup failed: ${it.message}") }
+            // Xerj local search (default ON): install the verified
+            // musl binary, then index /root/projects. Best-effort:
+            // any failure leaves the BM25 fallback live, honestly.
+            runCatching {
+                val installed = com.ersaz.hermesmobile.agent.XerjSetup.ensureInstalled(this@HermesRuntime)
+                log.i("xerj", installed)
+                if (installed.startsWith("Xerj installed") || installed.startsWith("Xerj already")) {
+                    runCatching { com.ersaz.hermesmobile.agent.XerjSetup.indexProjects(this@HermesRuntime) }
+                        .onFailure { log.e("xerj", "Index failed: ${it.message}") }
+                }
+            }.onFailure { log.e("xerj", "Xerj setup failed: ${it.message}") }
+            // Nightly learning (Sno concept, approval-gated): one 03:00
+            // job that only DRAFTS proposed rules. Seeded once; the
+            // user approves/rejects in the morning brief or via /rules.
+            runCatching {
+                val marker = File(hermesHome, "cron/.nightly-learning-v1")
+                if (!marker.exists() && cron.all().none { it.name == "Nightly learning" }) {
+                    cron.add(com.ersaz.hermesmobile.cron.CronJob(
+                        name = "Nightly learning",
+                        prompt = com.ersaz.hermesmobile.agent.RulesStore.NIGHTLY_PROMPT,
+                        schedule = "0 3 * * *", deliver = "local"))
+                    marker.parentFile?.mkdirs()
+                    marker.writeText("1")
+                }
+            }.onFailure { log.e("cron", "Nightly learning seed failed: ${it.message}") }
+            // Friday design review: one 09:00 Friday job that posts a short, real
+            // design-review brief in chat (impeccable rules + Browser review concepts).
+            // Seeded once like Nightly learning; toggleable in Settings → Scheduled tasks.
+            runCatching {
+                val marker = File(hermesHome, "cron/.friday-design-review-v1")
+                if (!marker.exists() && cron.all().none { it.name == "Friday design review" }) {
+                    cron.add(com.ersaz.hermesmobile.cron.CronJob(
+                        name = "Friday design review",
+                        prompt = com.ersaz.hermesmobile.agent.DesignReview.FRIDAY_DESIGN_REVIEW_PROMPT,
+                        schedule = "0 9 * * 5", deliver = "local"))
+                    marker.parentFile?.mkdirs()
+                    marker.writeText("1")
+                }
+            }.onFailure { log.e("cron", "Friday design review seed failed: ${it.message}") }
             runCatching { bridge.start() }.onFailure { log.e("bridge", "Startup failed: ${it.message}") }
             runCatching { router.autoStartIfNeeded() }.onFailure { log.e("router", "Startup failed: ${it.message}") }
             mcp.connectAllAsync()

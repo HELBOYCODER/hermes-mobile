@@ -38,8 +38,8 @@ jobs:
       - name: Fetch sandbox payload (PRoot + Alpine rootfs)
         run: |
           pip install --quiet patchelf
-          ./scripts/fetch_sandbox.sh
-          ./scripts/bundle_prerequisites.sh
+          bash scripts/fetch_sandbox.sh
+          bash scripts/bundle_prerequisites.sh
 
       - name: Decode keystore
         env:

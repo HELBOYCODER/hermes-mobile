@@ -1,0 +1,17 @@
+Attribution: HyperFrames workflow docs/templates (Apache-2.0, authorship kept). Source: https://github.com/heygen-com/hyperframes — bundled: .agents/skills SKILL.md + references/ + examples/ (HTML scene templates) ONLY. The ~526 MB renderer, assets (mp4/mp3/fonts) and scripts are NOT bundled. Video rendering needs a verified sandbox Chromium+ffmpeg or a desktop run. Hermes' own routing code is separate.
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all

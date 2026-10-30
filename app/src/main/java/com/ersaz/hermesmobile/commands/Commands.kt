@@ -43,6 +43,8 @@ object Commands {
     val defs = listOf(
         CommandDef("agents", "List sub-agent jobs; /agents cancel <id> stops one", "Tools", "[cancel <id>]"),
         CommandDef("mcp", "Manage MCP servers: list, add <url|command|json>, login/reconnect/enable/disable/remove <id>", "Tools", "[subcommand]"),
+        CommandDef("reload-mcp", "Disconnect and reconnect all enabled MCP servers, refresh tool lists, and report per-server status", "Tools"),
+        CommandDef("rules", "Nightly-learning rules: list proposals, approve <n> or reject <n>", "Tools & Skills", "[list|approve|reject] [n]"),
         CommandDef("new", "Start a new session (fresh history)", "Session", aliases = listOf("reset", "clear")),
         CommandDef("retry", "Retry the last message", "Session"),
         CommandDef("undo", "Back up N user turns (default 1)", "Session", "[N]"),
@@ -334,6 +336,38 @@ object Commands {
                     .ifBlank { "No sub-agent jobs in this conversation." })
             }
             "mcp" -> mcp(arg, rt)
+            "reload-mcp" -> {
+                val results = rt.mcp.reloadAll()
+                val lines = results.joinToString("\n") { (s, st) ->
+                    "• ${s.name} — " + when (st) {
+                        is com.ersaz.hermesmobile.mcp.McpStatus.Connected -> "✅ connected, ${st.tools} tools"
+                        is com.ersaz.hermesmobile.mcp.McpStatus.Failed -> "❌ error: ${st.message.take(200)}"
+                        is com.ersaz.hermesmobile.mcp.McpStatus.NeedsAuth -> "🔑 needs sign-in: ${st.message.take(200)}"
+                        is com.ersaz.hermesmobile.mcp.McpStatus.Connecting -> "⏳ connecting"
+                        com.ersaz.hermesmobile.mcp.McpStatus.Disabled -> "⏸ disabled"
+                    }
+                }
+                CommandResult.Reply("MCP reloaded (${results.size} servers):\n$lines")
+            }
+            "rules" -> {
+                val sub = arg.substringBefore(' ').lowercase()
+                val rest = arg.substringAfter(' ', "").trim()
+                val store = com.ersaz.hermesmobile.agent.RulesStore(rt)
+                when (sub) {
+                    "", "list" -> CommandResult.Reply(store.briefText())
+                    "approve" -> {
+                        val n = rest.toIntOrNull()
+                        if (n == null) CommandResult.Reply("Usage: /rules approve <n> (see /rules list).")
+                        else CommandResult.Reply(store.approve(n) ?: "No proposal #$n.")
+                    }
+                    "reject" -> {
+                        val n = rest.toIntOrNull()
+                        if (n == null) CommandResult.Reply("Usage: /rules reject <n> (see /rules list).")
+                        else CommandResult.Reply(store.reject(n) ?: "No proposal #$n.")
+                    }
+                    else -> CommandResult.Reply("Usage: /rules [list | approve <n> | reject <n>]")
+                }
+            }
             "cron" -> cron(arg, host)
             "platforms" -> CommandResult.Reply(rt.gateway.statusText())
             "version" -> CommandResult.Reply("☤ Hermes Agent for Android ${HermesRuntime.VERSION}\nSandbox: Alpine Linux on PRoot (${if (rt.sandbox.isInstalled()) "installed" else "not installed"})")

@@ -14,10 +14,10 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class RouterTest {
-    @Test fun openCodeFreeLaneExcludesZenAndOtherProviders() {
-        listOf("oc/big-pickle", "oc/union-alpha", "oc/jev-1.13-free", "opencode/muse-spark-free")
+    @Test fun openCodeFreeLaneIncludesZenAndOtherProviders() {
+        listOf("oc/big-pickle", "oc/union-alpha", "oc/jev-1.13-free", "opencode/muse-spark-free", "ocz/gpt-5-free", "zen/zen-free")
             .forEach { assertTrue(it, RouterApi.isOpenCodeFree(it)) }
-        listOf("ocz/gpt-5-free", "opencode-zen/union-alpha", "kgw/model:free", "oc/", "oc")
+        listOf("opencode-zen/union-alpha", "kgw/model:free", "oc/", "oc")
             .forEach { assertFalse(it, RouterApi.isOpenCodeFree(it)) }
         assertEquals("opencode", RouterApi.OPENCODE_FREE_PROVIDER)
     }
@@ -36,14 +36,14 @@ class RouterTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun openCodeFreeCombinesLiveCatalogWithBundledLaneAndExcludesZen() = runBlocking {
+    @Test fun openCodeFreeCombinesLiveCatalogWithBundledLaneIncludingZen() = runBlocking {
         val server = MockWebServer()
         server.enqueue(MockResponse().setBody("""{"data":[{"id":"big-pickle"},{"id":"new-free"}]}"""))
         server.enqueue(MockResponse().setBody("""{"data":[{"id":"oc/union-alpha"},{"id":"ocz/paid-free"},{"id":"other/free"}]}"""))
         server.start()
         try {
             val catalog = RouterApi(OkHttpClient(), server.url("").toString().trimEnd('/')).openCodeFreeModels("auth_token=x", "key")
-            assertEquals(listOf("oc/big-pickle", "oc/new-free", "oc/union-alpha"), catalog.models)
+            assertEquals(listOf("oc/big-pickle", "oc/new-free", "oc/paid-free", "oc/union-alpha"), catalog.models)
             assertTrue(catalog.live)
             assertEquals("opencode-free", server.takeRequest().requestUrl!!.queryParameter("type"))
         } finally { server.shutdown() }
@@ -56,7 +56,7 @@ class RouterTest {
         server.start()
         try {
             val catalog = RouterApi(OkHttpClient(), server.url("").toString().trimEnd('/')).openCodeFreeModels("auth_token=x", "key")
-            assertEquals(listOf("oc/union-alpha"), catalog.models)
+            assertEquals(listOf("oc/union-alpha", "oc/zen-free"), catalog.models)
             assertFalse(catalog.live)
         } finally { server.shutdown() }
     }

@@ -38,25 +38,12 @@ fun OnboardingScreen(rt: HermesRuntime, done: () -> Unit) {
         Text("Welcome to ${skin.agentName}", color = skin.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 8.dp))
         SectionTitle("Set up Hermes")
-        Hint("Easiest: sign in with your Nous Portal account. Free accounts get free models automatically — no API key needed. Or pick another provider and paste its key; keys stay on this phone.")
-        NousLoginCard(rt)
+        Hint("Easiest: sign in with your Nous Portal account. Free accounts get free models automatically — no API key needed. Or pick another provider and paste its key; keys stay on this phone. The Nous and Z.ai login cards now live inside the selected catalog entry below.")
         SectionTitle("Provider (Hermes uses account login)")
-        Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
-            val p = Providers.byId(id)
-            s.provider = id
-            if (!(id == "nous" && rt.nousAuth.signedIn)) {
-                if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
-                if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
-            }
-            refresh++
-        }
-        key(refresh) {
-            if (s.provider != "nous") {
-                Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-                Field("API key", s.apiKey, secret = true) { s.apiKey = it.trim() }
-            }
-            Field("Model", s.model) { s.model = it.trim() }
-        }
+        ProviderCatalogPanel(rt) { refresh++ }
+        Field("Model", s.model) { s.model = it.trim() }
+        SectionTitle("Permissions")
+        GrantAllPermissionsButton()
         Spacer(Modifier.height(12.dp))
         Row {
             Button(onClick = done) { Text("Start ☤") }

@@ -70,6 +70,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     var clarify by mutableStateOf<ClarifyRequest?>(null); private set
     var sessionTitle by mutableStateOf(""); private set
     var contextPct by mutableStateOf(0); private set
+    /** Tokens actually in this session (measured prompt tokens, else chars/4 estimate) — header shows it as an estimate. */
+    var contextTokens by mutableStateOf(0L); private set
+    var contextWindow by mutableStateOf(0); private set
     var input by mutableStateOf("")
     /** The Bot Mode profile this chat talks to; null = the default Hermes. */
     var activeBot by mutableStateOf<Bot?>(null); private set
@@ -229,7 +232,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     private fun refreshMeta() {
         sessionTitle = agent.session.displayTitle()
         val ctx = maxOf(agent.session.lastPromptTokens, agent.estimateTokens())
-        contextPct = (ctx * 100 / runtime.settings.contextLength.coerceAtLeast(1)).toInt()
+        contextTokens = ctx
+        contextWindow = runtime.settings.contextLength.coerceAtLeast(1)
+        contextPct = (ctx * 100 / contextWindow).toInt()
     }
 
     /** The picker changed provider/model: drop any per-session override and refresh the header. */
@@ -378,11 +383,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     fun canRetry(item: ChatItem.User): Boolean = !busy && item.failure != null &&
         agent.session.messages.lastOrNull { it.role == "user" && !it.content.startsWith("[SYSTEM:") && !it.content.startsWith("[USER STEER") }?.localId == item.messageId
 
-    private fun runTurn(text: String, images: List<String>, showUser: Boolean, retryMessageId: String? = null) {
+    private fun runTurn(text: String, images: List<String>, showUser: Boolean, retryMessageId: String? = null, quotaDepth: Int = 0) {
         if (showUser) items += ChatItem.User(k(), text, images)
         busy = true
         status = ""
         val a = agent
+        var quotaRetry: Triple<String, List<String>, Int>? = null
         job = viewModelScope.launch {
             var failed = false
             var current: ChatItem.Assistant? = null
@@ -430,10 +436,43 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                ui { items += ChatItem.Info(k(), "⚠️ ${e.message}", isError = true) }
+                // Quota handoff (ON by default): switch to the next
+                // configured provider and retry this same turn once per
+                // hop (max 3 hops), resuming from the checkpoint — never
+                // faking progress, never looping forever.
+                val msg = e.message.orEmpty()
+                if (runtime.settings.quotaFallback && quotaDepth < 3 &&
+                    com.ersaz.hermesmobile.agent.QuotaFallback.looksLikeQuota(msg)) {
+                    val next = com.ersaz.hermesmobile.agent.QuotaFallback.nextProvider(runtime)
+                    if (next != null) {
+                        val from = "${runtime.settings.provider} · ${runtime.settings.model}"
+                        com.ersaz.hermesmobile.agent.RunCheckpoint.save(runtime, sessionTitle.ifBlank { "chat" }, items.size,
+                            items.filterIsInstance<ChatItem.User>().lastOrNull()?.text.orEmpty(),
+                            items.filterIsInstance<ChatItem.Assistant>().lastOrNull()?.text.orEmpty())
+                        runtime.modelStore.select(next)
+                        ui { items += ChatItem.Info(k(), "Quota reached on $from — provider ${next.label} · ${next.model} took over from the last checkpoint, resuming (not restarting).") }
+                        quotaRetry = Triple(text, images, quotaDepth + 1)
+                    } else {
+                        ui {
+                            items += ChatItem.Info(k(), "⚠️ $msg", isError = true)
+                            items += ChatItem.Info(k(), "Quota reached, no fallback provider configured — add another provider in Settings → Models, then retry.")
+                        }
+                    }
+                } else {
+                    ui { items += ChatItem.Info(k(), "⚠️ $msg", isError = true) }
+                }
             } finally {
                 ui { busy = false; current?.streaming = false; refreshMeta(); flushQueue(); flushBackground() }
             }
+            // Token-saver readout (per finished run, on-device only).
+            if (quotaRetry == null && runtime.settings.tokenSaver) {
+                com.ersaz.hermesmobile.agent.TokenSaver.takeRunStats()?.let { st ->
+                    if (st.savedTokens > 0) ui {
+                        items += ChatItem.Info(k(), "Token saver: ~${st.beforeTokens} → ~${st.afterTokens} tokens (saved ~${st.savedTokens}, ${st.savedPct}%). Compression ran on-device on tool results only — files the agent writes are never compressed.")
+                    }
+                }
+            }
+            quotaRetry?.let { (t, imgs, d) -> runTurn(t, imgs, showUser = false, quotaDepth = d) }
         }
     }
 

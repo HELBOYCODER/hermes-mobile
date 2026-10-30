@@ -104,7 +104,9 @@ class PatchTool : Tool(
 
 class SearchFilesTool : Tool(
     "search_files", "file",
-    "Search the sandbox filesystem. target='content' greps file contents with a regex; target='files' finds files by glob name.",
+    "Search the sandbox filesystem. target='content' greps file contents with a regex; target='files' finds files by glob name. " +
+    "When the xerj MCP server is connected, prefer its search tools (exact file:line snippets from the local index); " +
+    "this tool is the indexed BM25 fallback (ranked files, line-numbered snippets, never whole files).",
     "🔎",
 ) {
     override val parameters = obj(
@@ -136,19 +138,77 @@ class SearchFilesTool : Tool(
                 if (results.length() >= limit) break
             }
         } else {
-            val rx = try { Regex(args.optString("pattern")) } catch (e: Exception) { return@withContext fail("Bad regex: ${e.message}") }
+            // Xerj preference: a plain-word query (no regex syntax) goes
+            // to the local Xerj index first when its binary is installed;
+            // a non-null result is Xerj's own ranked file:line output.
+            // Anything else falls through to the BM25 ranking below.
+            val pattern = args.optString("pattern")
+            val isPlainWords = pattern.isNotBlank() &&
+                pattern.none { it in ".*+?()[]{}|^$\\" }
+            if (isPlainWords) {
+                val xerj = com.ersaz.hermesmobile.agent.XerjSetup.search(ctx.runtime, pattern)
+                if (xerj != null) {
+                    return@withContext JSONObject().put("source", "xerj")
+                        .put("matches", JSONArray().put(xerj)).put("count", 1).toString()
+                }
+            }
+            val rx = try { Regex(pattern) } catch (e: Exception) { return@withContext fail("Bad regex: ${e.message}") }
             val fileRx = args.optString("file_glob").ifBlank { null }?.let { globToRegex(it) }
-            outer@ for (f in walk) {
+            // BM25 fallback (indexed ranking, line-numbered snippets):
+            // pass 1 collects per-file term frequencies + doc lengths
+            // for the query's words; pass 2 scores with BM25 (k1=1.2,
+            // b=0.75) and emits only the top files' snippets — never
+            // whole files. Files with no match never enter scoring.
+            val terms = Regex("[A-Za-z0-9_]{2,}").findAll(pattern.lowercase()).map { it.value }.distinct().toList()
+            data class Doc(val path: String, val len: Int, val tf: Map<String, Int>, val snippets: List<String>)
+            val docs = ArrayList<Doc>()
+            for (f in walk) {
                 if (fileRx != null && !fileRx.matches(f.name)) continue
                 if (f.length() > 5_000_000) continue
                 val lines = try { f.readLines() } catch (_: Exception) { continue }
                 if (lines.take(50).any { '\u0000' in it }) continue
+                val snippets = ArrayList<String>()
+                val tf = HashMap<String, Int>()
                 for ((i, l) in lines.withIndex()) {
-                    if (rx.containsMatchIn(l)) {
-                        results.put("${ctx.runtime.sandbox.guestPath(f)}:${i + 1}: ${l.trim().take(300)}")
-                        if (results.length() >= limit) break@outer
+                    if (rx.containsMatchIn(l) && snippets.size < 10) {
+                        snippets += "${ctx.runtime.sandbox.guestPath(f)}:${i + 1}: ${l.trim().take(300)}"
+                    }
+                    if (terms.isNotEmpty()) {
+                        val low = l.lowercase()
+                        for (t in terms) {
+                            var idx = low.indexOf(t)
+                            var c = 0
+                            while (idx >= 0) { c++; idx = low.indexOf(t, idx + t.length) }
+                            if (c > 0) tf[t] = (tf[t] ?: 0) + c
+                        }
                     }
                 }
+                if (snippets.isNotEmpty()) docs += Doc(ctx.runtime.sandbox.guestPath(f), lines.size.coerceAtLeast(1), tf, snippets)
+            }
+            val ranked = if (terms.isEmpty()) docs else {
+                val n = docs.size.toDouble()
+                val avgLen = docs.sumOf { it.len }.toDouble() / n.coerceAtLeast(1.0)
+                val df = terms.associateWith { t -> docs.count { (it.tf[t] ?: 0) > 0 }.toDouble() }
+                docs.sortedByDescending { d ->
+                    terms.sumOf { t ->
+                        val f = (d.tf[t] ?: 0).toDouble()
+                        if (f <= 0.0) 0.0 else {
+                            val idf = kotlin.math.ln(1.0 + (n - (df[t] ?: 0.0) + 0.5) / ((df[t] ?: 0.0) + 0.5))
+                            idf * (f * 2.2) / (f + 1.2 * (1.0 - 0.75 + 0.75 * d.len / avgLen))
+                        }
+                    }
+                }
+            }
+            var emitted = 0
+            outer@ for (d in ranked) {
+                for (s in d.snippets) {
+                    results.put(s); emitted++
+                    if (emitted >= limit) break@outer
+                }
+            }
+            if (results.length() >= limit) {
+                return@withContext JSONObject().put("source", "bm25").put("matches", results)
+                    .put("count", results.length()).put("truncated", true).toString()
             }
         }
         JSONObject().put("matches", results).put("count", results.length())

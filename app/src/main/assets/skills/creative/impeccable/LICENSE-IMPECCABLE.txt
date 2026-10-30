@@ -1,0 +1,17 @@
+Attribution: Impeccable skill text (Apache-2.0, authorship kept). Source: https://github.com/pbakaus/impeccable — bundled: impeccable SKILL.md + reference/ (design vocabulary + critique/audit guides) ONLY. The ~887 MB repo (browser engine, CLI, platform binaries) is NOT bundled. Hermes' own routing code is separate.
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
