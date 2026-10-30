@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontFamily
 
 /**
  * Hermes skins (hermes_cli/skin_engine.py), ported 1:1: palette, spinner faces/verbs,
@@ -38,6 +39,9 @@ data class Skin(
     val thinkingFaces: List<String> = DEFAULT_THINKING,
     val thinkingVerbs: List<String> = DEFAULT_VERBS,
     val wings: List<Pair<String, String>> = emptyList(),
+    /** Display face (headings, model name) and body face. Android built-ins stand in for web pairs. */
+    val fontDisplay: FontFamily = FontFamily.Default,
+    val fontBody: FontFamily = FontFamily.Default,
 ) {
     companion object {
         val DEFAULT_WAITING = listOf("(｡◕‿◕｡)", "(◕‿◕✿)", "٩(◕‿◕｡)۶", "(✿◠‿◠)", "( ˘▽˘)っ", "♪(´ε` )", "(◕ᴗ◕✿)", "ヾ(＾∇＾)", "(≧◡≦)", "(★ω★)")
@@ -67,6 +71,18 @@ object Skins {
             accent = c("#2F5BFF"), dim = c("#6E7781"), text = c("#1F2328"), label = c("#57606A"),
             ok = c("#1A7F37"), error = c("#CF222E"), warn = c("#9A6700"), responseBorder = c("#2F5BFF"), shellDollar = c("#2F5BFF"),
             agentName = "Hermes", toolPrefix = "·"),
+        // Chat redesign skin (2.7.1): ui-ux-pro-max palette #1 "SaaS (General)" —
+        // trust blue + orange CTA on near-white, flat surfaces, no gradients. Font pair from the same
+        // skill's font list: Inter (clean modern sans, UI/body) + Source Serif 4 (editorial serif,
+        // headings); on Android these render as the built-in SansSerif/Serif stand-ins — no webfont
+        // is downloaded on the phone. The chat page renders in this skin; other screens keep the
+        // user's chosen skin.
+        Skin("atelier", "Chat redesign — ui-ux-pro-max SaaS palette, Inter + Source Serif 4 stand-ins", true,
+            bg = c("#F8FAFC"), surface = c("#FFFFFF"), selection = c("#E9EFF8"), border = c("#E2E8F0"), title = c("#1E293B"),
+            accent = c("#2563EB"), dim = c("#475569"), text = c("#1E293B"), label = c("#475569"),
+            ok = c("#15803D"), error = c("#DC2626"), warn = c("#9A6700"), responseBorder = c("#2563EB"), shellDollar = c("#2563EB"),
+            agentName = "Hermes", toolPrefix = "·",
+            fontDisplay = FontFamily.Serif, fontBody = FontFamily.SansSerif),
         Skin("default", "Classic Hermes — gold and kawaii", false,
             bg = c("#12121F"), surface = c("#1a1a2e"), selection = c("#3a3a55"), border = c("#CD7F32"), title = c("#FFD700"),
             accent = c("#FFBF00"), dim = c("#B8860B"), text = c("#FFF8DC"), label = c("#DAA520"),

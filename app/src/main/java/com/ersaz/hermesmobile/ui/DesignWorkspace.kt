@@ -66,6 +66,51 @@ fun DesignWorkspacePanel(rt: HermesRuntime, vm: ChatViewModel, onNavigate: (Stri
         TextButton(onClick = { vm.input = prompt }) { Text(name) }
     }
 
+    SectionTitle("Design graph (Graphify concept, built on-device)")
+    Text("A small index of this project's real design elements — screens, @Composable components, design tokens (hex colours) and CSS styles — with 'uses' edges between files and components. Built only when you tap Refresh (never on chat open, never in the background), stored as .hermes/design-graph.json under the project folder, and readable by the agent when designing. Nothing is invented: a node exists only if a project file actually contains it.",
+        color = skin.dim, fontSize = 12.sp)
+    Text("Figma import route: MCP Hub → Figma Context MCP (Framelink) — import Figma data into this project from there. This panel does not duplicate that entry.",
+        color = skin.dim, fontSize = 12.sp)
+    var graph by remember { mutableStateOf<com.ersaz.hermesmobile.agent.DesignGraph?>(null) }
+    var graphMsg by remember { mutableStateOf("") }
+    var graphNode by remember { mutableStateOf<String?>(null) }
+    Row {
+        OutlinedButton(enabled = !busy, onClick = {
+            busy = true; scope.launch {
+                val g = withContext(Dispatchers.IO) {
+                    val built = com.ersaz.hermesmobile.agent.DesignGraphBuilder.build(rt, project)
+                    com.ersaz.hermesmobile.agent.DesignGraphBuilder.save(rt, project, built)
+                    built
+                }
+                graph = g; graphNode = null
+                graphMsg = "Graph built from $project: ${g.nodes.size} nodes, ${g.edges.size} edges " +
+                    "(screens ${g.count("screen")}, components ${g.count("component")}, tokens ${g.count("token")}, styles ${g.count("style")})."
+                busy = false
+            }
+        }) { Text("Refresh design graph") }
+        OutlinedButton(enabled = !busy, onClick = {
+            val loaded = com.ersaz.hermesmobile.agent.DesignGraphBuilder.load(rt, project)
+            graph = loaded
+            graphMsg = if (loaded == null) "No saved design graph yet for this project — tap Refresh to build one."
+                else "Loaded saved graph: ${loaded.nodes.size} nodes, ${loaded.edges.size} edges."
+        }) { Text("Load saved graph") }
+    }
+    if (graphMsg.isNotBlank()) Text(graphMsg, color = skin.label, fontSize = 12.sp)
+    graph?.let { g ->
+        val shown = g.nodes.take(30)
+        shown.forEach { n ->
+            TextButton(onClick = { graphNode = if (graphNode == n.name) null else n.name }) {
+                Text("${n.kind}: ${n.name}  (${n.path})", fontSize = 12.sp)
+            }
+            if (graphNode == n.name) {
+                val conns = g.connections(n.name)
+                Text(if (conns.isEmpty()) "  No connections found." else "  Connected to: " + conns.take(12).joinToString(", "),
+                    color = skin.dim, fontSize = 11.5.sp, modifier = Modifier.padding(start = 12.dp))
+            }
+        }
+        if (g.nodes.size > 30) Text("… and ${g.nodes.size - 30} more nodes (see .hermes/design-graph.json).", color = skin.dim, fontSize = 11.5.sp)
+    }
+
     SectionTitle("Film mode (code-based, no video model)")
     Text("Pick one of 66 styles (repo count — the circulating post said 59) or describe your own. Story + style become scene-by-scene HTML/GSAP code; rendering to video is attempted in the sandbox (Chromium + ffmpeg) and, if it cannot run, the complete coded film is still delivered via ZIP export with the exact desktop step named.",
         color = skin.dim, fontSize = 12.sp)

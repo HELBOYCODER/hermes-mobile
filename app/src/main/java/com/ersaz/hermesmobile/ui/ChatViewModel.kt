@@ -70,6 +70,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     var clarify by mutableStateOf<ClarifyRequest?>(null); private set
     var sessionTitle by mutableStateOf(""); private set
     var contextPct by mutableStateOf(0); private set
+    /** Tokens actually in this session (measured prompt tokens, else chars/4 estimate) — header shows it as an estimate. */
+    var contextTokens by mutableStateOf(0L); private set
+    var contextWindow by mutableStateOf(0); private set
     var input by mutableStateOf("")
     /** The Bot Mode profile this chat talks to; null = the default Hermes. */
     var activeBot by mutableStateOf<Bot?>(null); private set
@@ -229,7 +232,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app), CommandHost {
     private fun refreshMeta() {
         sessionTitle = agent.session.displayTitle()
         val ctx = maxOf(agent.session.lastPromptTokens, agent.estimateTokens())
-        contextPct = (ctx * 100 / runtime.settings.contextLength.coerceAtLeast(1)).toInt()
+        contextTokens = ctx
+        contextWindow = runtime.settings.contextLength.coerceAtLeast(1)
+        contextPct = (ctx * 100 / contextWindow).toInt()
     }
 
     /** The picker changed provider/model: drop any per-session override and refresh the header. */

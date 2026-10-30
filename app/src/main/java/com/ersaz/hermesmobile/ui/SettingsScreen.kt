@@ -350,6 +350,7 @@ fun SettingsScreen(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
         Field("Voice input language (BCP-47, e.g. fa-IR, en-US; blank = device)", s.voiceLang) { s.voiceLang = it.trim() }
         Toggle("Suggested replies", s.suggestedReplies, "Show up to 3 ready-made reply chips above the composer after the agent's last message. Tapping one fills the composer — it never sends by itself.") { s.suggestedReplies = it; refresh++ }
         Toggle("Token saver", s.tokenSaver, "ON by default: compress tool outputs, logs, files and search chunks on-device before they reach the model (JSON minify, comment stripping, repeated-line dedup, marked truncation). Never drops error lines or log tails; never touches files the agent writes. Per-run savings are shown in chat.") { s.tokenSaver = it; refresh++ }
+        Toggle("Chat animations", s.chatAnimations, "ON by default: animated thinking pill, sandbox miniature expand/collapse, and status-dot pulse on the chat page. Off = instant transitions (reduced motion). Decorative animation never runs on chat open or in the background.") { s.chatAnimations = it; refresh++ }
 
         }
 

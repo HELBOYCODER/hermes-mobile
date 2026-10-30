@@ -57,8 +57,11 @@ fun RouterScreen(rt: HermesRuntime) {
     val rMsg by rt.router.message.collectAsState()
     val rLog by rt.router.log.collectAsState()
     val wreq by rt.router.wreqJsStatus.collectAsState()
+    val rDiagnosis by rt.router.diagnosis.collectAsState()
     var rev by remember { mutableIntStateOf(0) }
     var showPassword by remember { mutableStateOf(false) }
+    var diagText by remember { mutableStateOf("") }
+    var diagBusy by remember { mutableStateOf(false) }
     val s = rt.settings
     // Recompute on every action; the store itself is the source of truth.
     @Suppress("UNUSED_VARIABLE")
@@ -83,9 +86,18 @@ fun RouterScreen(rt: HermesRuntime) {
             NineRouter.State.ERROR -> "error"
         }, color = skin.label, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
         Text("Free models listed: $freeCount", color = skin.label, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
+        // Honest empty states: a zero here used to look identical whether the router was down,
+        // the dashboard login failed, the catalog was empty, or the quota was hit. Each cause
+        // now gets its own line and its own next step.
+        if (freeCount == 0) Text(when (rState) {
+            NineRouter.State.NOT_INSTALLED -> "No free models yet — 9Router is not installed. Tap Install 9Router below."
+            NineRouter.State.STOPPED, NineRouter.State.STARTING, NineRouter.State.INSTALLING -> "No free models yet — 9Router is not running. Tap Start, then Refresh free models."
+            NineRouter.State.ERROR -> "No free models listed — the last setup step failed (see the message below or tap Diagnose free models)."
+            NineRouter.State.RUNNING -> "9Router is running but lists no OpenCode free models. Tap Diagnose free models to see which catalog step came back empty, then Refresh free models."
+        }, color = skin.warn, fontSize = 12.5.sp, modifier = Modifier.padding(vertical = 2.dp))
         Text("wreq-js: $wreq", color = if (wreq == "available") skin.ok else skin.label, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
         if (wreq != "available") Text(
-            "wreq-js lets 9router's OpenCode free lane resolve its runtime dependency. Installing it fixes the 502 “wreq-js unavailable” error; it does not remove OpenCode's upstream free-tier daily quota.",
+            "wreq-js lets 9Router's OpenCode free lane resolve its runtime dependency. Installing it fixes the 502 “wreq-js unavailable” error when a free model is CALLED; it does not fill this list (a missing wreq-js never empties the catalog) and it does not remove OpenCode's upstream free-tier daily quota.",
             color = skin.dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 2.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
             Button(enabled = !busy, onClick = { scope.launch { rt.router.installAndSetup(); rev++ } }) {
@@ -100,6 +112,12 @@ fun RouterScreen(rt: HermesRuntime) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
             OutlinedButton(enabled = rState == NineRouter.State.RUNNING,
                 onClick = { scope.launch { rt.router.refreshFreeModels(selectAsProvider = false); rev++ } }) { Text("Refresh free models") }
+            OutlinedButton(enabled = !diagBusy, onClick = {
+                diagBusy = true; scope.launch {
+                    diagText = rt.router.diagnose()
+                    diagBusy = false; rev++
+                }
+            }) { Text(if (diagBusy) "Diagnosing…" else "Diagnose free models") }
             OutlinedButton(onClick = { scope.launch { rt.router.ensureWreqJs(); rev++ } }) { Text("Ensure wreq-js") }
             OutlinedButton(onClick = {
                 runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(rt.router.dashboardUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -121,6 +139,9 @@ fun RouterScreen(rt: HermesRuntime) {
         }
         if (s.routerPassword.isBlank()) Text("The dashboard password appears when 9Router starts.", color = skin.dim, fontSize = 12.sp)
         Toggle("Start with the app", s.routerAutoStart, "Starts 9Router whenever Hermes opens") { s.routerAutoStart = it; rev++ }
+        if (diagText.isNotBlank()) Text(diagText, color = skin.label, fontSize = 12.5.sp,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).background(skin.surface, RoundedCornerShape(10.dp)).padding(10.dp))
+        if (rDiagnosis.isNotBlank()) Text(rDiagnosis, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
         if (rMsg.isNotBlank()) Text(rMsg, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
         if (rLog.isNotBlank()) Text(rLog.takeLast(1200), color = skin.dim, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp).background(skin.surface, RoundedCornerShape(10.dp)).padding(8.dp))

@@ -133,6 +133,20 @@ class HermesRuntime(val app: Application) {
                     marker.writeText("1")
                 }
             }.onFailure { log.e("cron", "Nightly learning seed failed: ${it.message}") }
+            // Friday design review: one 09:00 Friday job that posts a short, real
+            // design-review brief in chat (impeccable rules + Browser review concepts).
+            // Seeded once like Nightly learning; toggleable in Settings → Scheduled tasks.
+            runCatching {
+                val marker = File(hermesHome, "cron/.friday-design-review-v1")
+                if (!marker.exists() && cron.all().none { it.name == "Friday design review" }) {
+                    cron.add(com.ersaz.hermesmobile.cron.CronJob(
+                        name = "Friday design review",
+                        prompt = com.ersaz.hermesmobile.agent.DesignReview.FRIDAY_DESIGN_REVIEW_PROMPT,
+                        schedule = "0 9 * * 5", deliver = "local"))
+                    marker.parentFile?.mkdirs()
+                    marker.writeText("1")
+                }
+            }.onFailure { log.e("cron", "Friday design review seed failed: ${it.message}") }
             runCatching { bridge.start() }.onFailure { log.e("bridge", "Startup failed: ${it.message}") }
             runCatching { router.autoStartIfNeeded() }.onFailure { log.e("router", "Startup failed: ${it.message}") }
             mcp.connectAllAsync()

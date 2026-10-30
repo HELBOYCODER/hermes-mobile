@@ -101,6 +101,7 @@ class Settings(context: Context) : NousTokenStore {
     var specFirst by bool("spec_first", true)
     /** Suggested replies above the composer (ON by default). */
     var suggestedReplies by bool("suggested_replies", true)
+    var chatAnimations by bool("chat_animations", true) // reduced-motion: off = instant transitions on the chat page
     /** Token saver (Headroom concept, Hermes code): compress tool
      * results before they reach the model. ON by default. */
     var tokenSaver by bool("token_saver", true)

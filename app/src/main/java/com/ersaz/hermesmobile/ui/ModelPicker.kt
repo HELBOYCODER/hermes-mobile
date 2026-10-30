@@ -91,7 +91,7 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
             // Soft, rounded chips — Hermes' own design system, not another app's UI.
             Text("Thinking", color = skin.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                listOf("" to "Default", "none" to "None", "low" to "Low", "medium" to "Medium", "high" to "High").forEach { (value, label) ->
+                listOf("" to "Default", "none" to "None", "low" to "Low", "medium" to "Medium", "high" to "High", "xhigh" to "XHigh", "max" to "Max").forEach { (value, label) ->
                     FilterChip(
                         selected = rt.settings.reasoningEffort == value,
                         onClick = { rt.settings.reasoningEffort = value; rev++ },
@@ -127,9 +127,24 @@ fun ModelPickerSheet(vm: ChatViewModel, onDismiss: () -> Unit) {
                 FilterChip(selected = !freeOnly, onClick = { freeOnly = false }, label = { Text("All") })
                 FilterChip(selected = freeOnly, onClick = { freeOnly = true }, label = { Text("Free") })
             }
-            if (list.isEmpty()) Text("No models yet. Fetch the current provider's list or add one.", color = skin.dim, fontSize = 13.sp,
+            if (list.isEmpty()) Text(if (freeOnly) "No free models listed. If you use 9Router, open the 9Router screen and tap Refresh free models — OpenCode free models appear there first, never here by guesswork." else "No models yet. Fetch the current provider's list or add one.", color = skin.dim, fontSize = 13.sp,
                 modifier = Modifier.padding(vertical = 12.dp))
-            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+            // "Show current model" jump: flat index in the header-interleaved list (headers count).
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val activeFlatIndex = remember(list) {
+                var idx = 0; var last = ""; var found = -1
+                for (p in list) {
+                    if (p.label != last) { last = p.label; idx++ }
+                    if (store.isActive(p)) { found = idx; break }
+                    idx++
+                }
+                found
+            }
+            if (list.isNotEmpty() && activeFlatIndex >= 0) {
+                TextButton(onClick = { scope.launch { listState.scrollToItem(activeFlatIndex) } },
+                    modifier = Modifier.padding(bottom = 2.dp)) { Text("Show current model", fontSize = 12.sp) }
+            }
+            LazyColumn(Modifier.heightIn(max = 420.dp), state = listState) {
                 var last = ""
                 list.forEach { p ->
                     if (p.label != last) { last = p.label; item(key = "h_" + p.label) { Text(p.label, color = skin.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp)) } }

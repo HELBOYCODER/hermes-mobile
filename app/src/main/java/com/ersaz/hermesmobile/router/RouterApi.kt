@@ -63,27 +63,65 @@ class RouterApi(http: OkHttpClient, val baseUrl: String) {
         http.newCall(req).execute().use { r ->
             if (!r.isSuccessful) return@withContext emptyList()
             val arr = JSONObject(r.body?.string().orEmpty()).optJSONArray("data") ?: JSONArray()
-            (0 until arr.length()).map { arr.getJSONObject(it).optString("id") }.filter { it.isNotBlank() }
+            (0 until arr.length()).mapNotNull { parseModelId(arr, it) }.filter { it.isNotBlank() }
         }
     }
 
-    data class FreeCatalog(val models: List<String>, val live: Boolean)
+    /**
+     * One catalog entry: an id string, or an object with "id" (OpenAI-style) or "name".
+     * The old code called getJSONObject on every entry, so a single string entry threw and
+     * the whole suggested-models result collapsed to an empty list — silently.
+     */
+    private fun parseModelId(arr: JSONArray, i: Int): String? = runCatching {
+        when (val v = arr[i]) {
+            is String -> v
+            is JSONObject -> v.optString("id").ifBlank { v.optString("name") }
+            else -> null
+        }
+    }.getOrNull()
 
-    suspend fun openCodeFreeModels(cookie: String, key: String): FreeCatalog = withContext(Dispatchers.IO) {
-        val live = runCatching {
+    /** Id arrays may arrive under "data" (OpenAI-style) or "models" (9Router variants). */
+    private fun modelArray(body: String): JSONArray {
+        val o = runCatching { JSONObject(body) }.getOrNull() ?: return JSONArray()
+        return o.optJSONArray("data") ?: o.optJSONArray("models") ?: JSONArray()
+    }
+
+    /** Suggested OpenCode free models from the dashboard, with reachability reported separately. */
+    suspend fun suggestedModels(cookie: String): Pair<Boolean, List<String>> = withContext(Dispatchers.IO) {
+        runCatching {
             val endpoint = "$baseUrl/api/providers/suggested-models".toHttpUrl()
                 .newBuilder().addQueryParameter("url", "https://opencode.ai/zen/v1/models")
                 .addQueryParameter("type", "opencode-free").build()
             http.newCall(Request.Builder().url(endpoint).header("Cookie", cookie).build()).execute().use { r ->
-                if (!r.isSuccessful) emptyList() else {
-                    val data = JSONObject(r.body?.string().orEmpty()).optJSONArray("data") ?: JSONArray()
-                    (0 until data.length()).map { data.getJSONObject(it).optString("id") }
-                        .filter { it.isNotBlank() }.map { "oc/" + it.removePrefix("oc/").removePrefix("opencode/") }
+                if (!r.isSuccessful) false to emptyList()
+                else {
+                    val body = r.body?.string().orEmpty()
+                    val arr = modelArray(body)
+                    true to (0 until arr.length())
+                        .mapNotNull { parseModelId(arr, it) }
+                        .filter { it.isNotBlank() }.map { normalizeOpenCodeId(it) }
                 }
             }
-        }.getOrDefault(emptyList())
-        val builtIn = models(key).filter { isOpenCodeFree(it) }
-        FreeCatalog((live + builtIn).distinct().sorted(), live.isNotEmpty())
+        }.getOrDefault(false to emptyList())
+    }
+
+    /** Namespace histogram of /v1/models, for diagnosis only (no model is invented from it). */
+    suspend fun modelNamespaces(key: String): Map<String, Int> =
+        models(key).groupingBy { if ('/' in it) it.substringBefore('/').lowercase() else "(bare)" }.eachCount()
+
+    data class FreeCatalog(
+        val models: List<String>,
+        val live: Boolean,
+        val liveCount: Int = 0,
+        val builtinCount: Int = 0,
+        val liveReachable: Boolean = false,
+    )
+
+    suspend fun openCodeFreeModels(cookie: String, key: String): FreeCatalog = withContext(Dispatchers.IO) {
+        val (reachable, liveRaw) = suggestedModels(cookie)
+        val builtIn = models(key).filter { isOpenCodeFree(it) }.map { normalizeOpenCodeId(it) }
+        FreeCatalog((liveRaw + builtIn).distinct().sorted(), liveRaw.isNotEmpty(),
+            liveCount = liveRaw.size, builtinCount = builtIn.size, liveReachable = reachable)
     }
 
     /** One tiny completion; returns null when the model answers, otherwise the upstream error text. */
@@ -112,9 +150,23 @@ class RouterApi(http: OkHttpClient, val baseUrl: String) {
 
         const val OPENCODE_FREE_PROVIDER = "opencode"
 
-        /** The oc namespace is 9Router's no-auth OpenCode Free lane; ocz is Zen. */
+        /**
+         * The oc namespace is 9Router's no-auth OpenCode Free lane; ocz is Zen, and some
+         * 9Router builds expose the same lane as "zen/…". All three are the OpenCode free
+         * lane — the old set dropped zen/ocz ids entirely, so a Zen-only catalog came back
+         * empty even though the router was serving free models.
+         */
         fun isOpenCodeFree(id: String): Boolean =
-            id.substringBefore('/').lowercase() in setOf("oc", "opencode") && id.substringAfter('/', "").isNotBlank()
+            id.substringBefore('/').lowercase() in setOf("oc", "opencode", "zen", "ocz") && id.substringAfter('/', "").isNotBlank()
+
+        /** One canonical id for the free lane: strip any lane prefix, re-prefix with oc/. */
+        fun normalizeOpenCodeId(id: String): String {
+            var bare = id.trim()
+            for (prefix in listOf("oc/", "opencode/", "zen/", "ocz/")) {
+                if (bare.lowercase().startsWith(prefix)) { bare = bare.substring(prefix.length); break }
+            }
+            return "oc/$bare"
+        }
 
         /** Free-tier model ids in 9Router's catalog carry "free" in their name (":free", "-free", "/free"). */
         fun isFree(id: String) = FREE.containsMatchIn(id)

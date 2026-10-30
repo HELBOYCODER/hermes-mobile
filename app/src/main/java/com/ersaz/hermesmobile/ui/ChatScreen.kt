@@ -90,7 +90,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.ersaz.hermesmobile.commands.Commands
 import com.ersaz.hermesmobile.stt.VoiceLang
+import com.ersaz.hermesmobile.ui.theme.HermesTheme
 import com.ersaz.hermesmobile.ui.theme.LocalSkin
+import com.ersaz.hermesmobile.ui.theme.Skins
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -101,6 +103,15 @@ private val ContentMaxWidth = 760.dp
 
 @Composable
 fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal: () -> Unit = {}) {
+    // The chat page renders in the atelier skin (ui-ux-pro-max SaaS palette + Inter/Source Serif 4
+    // stand-ins); every other screen keeps the user's chosen skin.
+    HermesTheme(Skins.byName("atelier")) {
+        ChatScreenBody(vm, onOpenBrowser, onOpenTerminal)
+    }
+}
+
+@Composable
+private fun ChatScreenBody(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal: () -> Unit = {}) {
     val skin = LocalSkin.current
     val listState = rememberLazyListState()
     val context = LocalContext.current
@@ -157,22 +168,31 @@ fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal
     }
 
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Header first, before the transcript: model pill, thinking pill, cost chip, context bar.
+        var showModels by remember { mutableStateOf(false) }
+        ChatHeader(vm) { showModels = true }
+        if (showModels) ModelPickerSheet(vm) { showModels = false }
         LazyColumn(
             Modifier.weight(1f).widthIn(max = ContentMaxWidth).fillMaxWidth(),
             state = listState,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         ) {
             if (vm.items.isEmpty()) item { Banner(vm) }
-            items(vm.items, key = { it.key }) { item -> ChatRow(item, vm) }
+            // Folded transcript, computed inline each composition so a tool call that just
+            // finished (result null -> value) re-groups immediately; running calls never fold.
+            val display = foldTranscript(vm.items)
+            items(display, key = { it.key }) { row ->
+                when (row) {
+                    is SingleRow -> ChatRow(row.item, vm)
+                    is ToolGroupData -> ToolGroupRow(row.tools, vm)
+                }
+            }
             if (vm.busy) item { Spinner() }
         }
 
         BrowserMiniPreview(vm.runtime, onOpenBrowser)
         SandboxMiniPreview(vm, onOpenTerminal)
-
-        var showModels by remember { mutableStateOf(false) }
-        StatusLine(vm) { showModels = true }
-        if (showModels) ModelPickerSheet(vm) { showModels = false }
+        SubAgentCards(vm)
 
         // Slash-command autocomplete (Hermes CLI completion menu)
         if (vm.input.startsWith("/") && !vm.input.contains(' ')) {
@@ -202,6 +222,7 @@ fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal
         }
         SuggestedRepliesRow(vm)
         HarnessControls(vm)
+        if (vm.clarify != null) ClarifyCard(vm)
         Composer(vm, onImage = { imagePicker.launch("image/*") }, onFile = { filePicker.launch(arrayOf("*/*")) }, onMic = onMic)
     }
 
@@ -227,22 +248,6 @@ fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal
         )
     }
 
-    vm.clarify?.let { req ->
-        var answer by remember(req) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text(req.question) },
-            text = {
-                Column {
-                    req.choices.forEach { c ->
-                        Text("• $c", color = skin.accent, modifier = Modifier.fillMaxWidth().clickable { vm.answerClarify(c) }.padding(vertical = 8.dp))
-                    }
-                    OutlinedTextField(answer, { answer = it }, placeholder = { Text("Your answer") })
-                }
-            },
-            confirmButton = { TextButton(onClick = { vm.answerClarify(answer.ifBlank { "(no answer)" }) }) { Text("Answer") } },
-        )
-    }
 }
 
 /**
@@ -300,70 +305,6 @@ private fun BrowserMiniPreview(rt: com.ersaz.hermesmobile.HermesRuntime, onOpenB
 }
 
 /** Compact status of real PRoot processes and terminal sessions, never a simulated run. */
-@Composable
-private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
-    val skin = LocalSkin.current
-    val rt = vm.runtime
-    var refresh by remember { mutableIntStateOf(0) }
-    LaunchedEffect(vm.busy) {
-        while (vm.busy) {
-            delay(2300)
-            refresh++
-        }
-    }
-    val running = remember(refresh) { rt.processes.list().lastOrNull { it.isRunning } }
-    val activeTool = vm.items.lastOrNull {
-        it is ChatItem.Tool && it.result == null && it.name in setOf("terminal", "coding_workflow")
-    } as? ChatItem.Tool
-    if (running != null || activeTool != null) {
-        val output = running?.let { rt.processes.log(it.id, 5).orEmpty() }.orEmpty()
-        // Terminal output is shown only to the owner in this UI, not added to LLM messages.
-        var safe = rt.settings.redactEnvironment(output)
-        (rt.modelStore.all().map { it.apiKey } + rt.settings.apiKey)
-            .filter { it.length >= 8 }.forEach { safe = safe.replace(it, "[REDACTED]") }
-        val lines = safe.lines().takeLast(2).joinToString("\n").take(120)
-        Surface(
-            modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = skin.surface, shadowElevation = 2.dp,
-        ) {
-            Column(Modifier.clickable(onClick = onOpenTerminal).padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sandbox activity", color = skin.title, fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Text("Open terminal ›", color = skin.accent, fontSize = 11.sp)
-                }
-                Text(
-                    when {
-                        activeTool != null -> "Agent is executing: ${activeTool.name}"
-                        running != null -> "Running background process ${running.id}"
-                        else -> "${TerminalTabs.sessions.size} terminal session(s)"
-                    },
-                    color = skin.dim, fontSize = 11.sp,
-                )
-                if (lines.isNotBlank()) Text(lines, color = skin.label, fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
-
-// ------------------------------------------------------------------ composer
-
-/** One floating pill, no outline: [attachments] / text / [+ · language · … · mic · send]. */
-/**
- * Harness concepts adopted into Hermes' own native engine (real, not
- * labels): (1) run info per run — engine, model, thinking, spec-first,
- * task routing, enabled toolsets, approval note; (2) task-based model
- * routing — a tap-to-use suggestion chip from already-configured
- * models, never a silent switch; (3) checkpoint/resume — progress is
- * persisted after each completed assistant turn, and a fresh session
- * offers "Resume interrupted run", which fills the composer with the
- * checkpoint summary (user presses send). Resume is summary-based:
- * it does not replay tool calls or restore hidden agent state.
- * Copilot (Foundry) selected here still runs native: see
- * CopilotHarness (remote stub, sends nothing).
- */
 @Composable
 private fun HarnessControls(vm: ChatViewModel) {
     val skin = LocalSkin.current
@@ -684,6 +625,7 @@ private fun ChatRow(item: ChatItem, vm: ChatViewModel) {
             var open by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { open = !open }.padding(vertical = 3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (item.result == null) Text("● ", color = skin.ok, fontSize = 10.sp)
                     Text("${item.emoji}  ", fontSize = 12.sp)
                     Text(item.name, color = skin.label, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
                     Text("  " + item.preview, color = skin.dim, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
@@ -739,19 +681,78 @@ private fun Spinner() {
     Text("${skin.symbol} $verb$dots", color = skin.dim, fontSize = 13.sp, modifier = Modifier.padding(vertical = 10.dp))
 }
 
+/** Transcript rows after folding: a single item, or a run of consecutive finished tool calls. */
+private sealed interface TranscriptRow { val key: String }
+private data class SingleRow(val item: ChatItem) : TranscriptRow { override val key get() = item.key }
+private data class ToolGroupData(val tools: List<ChatItem.Tool>) : TranscriptRow { override val key get() = "tools:" + tools.first().key }
+
+/**
+ * Fold consecutive FINISHED tool calls into one "Ran N tools" row (on by default). A running
+ * tool call (result == null) is never folded — it stays visible with its working state — and
+ * folding never hides a tool's content: tapping the row expands the individual calls.
+ */
+private fun foldTranscript(items: List<ChatItem>): List<TranscriptRow> {
+    val out = ArrayList<TranscriptRow>()
+    var pending = ArrayList<ChatItem.Tool>()
+    fun flush() { if (pending.isNotEmpty()) { out += ToolGroupData(pending); pending = ArrayList() } }
+    for (item in items) {
+        if (item is ChatItem.Tool && item.result != null) pending += item
+        else { flush(); out += SingleRow(item) }
+    }
+    flush()
+    return out
+}
+
 @Composable
-private fun StatusLine(vm: ChatViewModel, onModel: () -> Unit) {
+private fun ToolGroupRow(tools: List<ChatItem.Tool>, vm: ChatViewModel) {
     val skin = LocalSkin.current
-    val pct = vm.contextPct
-    val color = when { pct >= 85 -> skin.error; pct >= 60 -> skin.warn; else -> skin.dim }
-    @Suppress("UNUSED_VARIABLE") val rev = vm.modelRev
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "${vm.agent.model().substringAfterLast('/')}  ▾",
-            color = skin.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(10.dp)).clickable(onClick = onModel).padding(horizontal = 10.dp, vertical = 4.dp),
-        )
-        if (vm.runtime.settings.showStatusBar) Text("  ·  ctx $pct%", color = color, fontSize = 11.sp)
+    var open by remember(tools.first().key) { mutableStateOf(false) }
+    val totalSec = tools.mapNotNull { it.durationMs }.sum() / 1000.0
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { open = !open }.padding(vertical = 3.dp)
+        .then(if (vm.runtime.settings.chatAnimations) Modifier.animateContentSize() else Modifier)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (open) "▾ " else "▸ ", color = skin.dim, fontSize = 12.sp)
+            Text("Ran ${tools.size} tools", color = skin.label, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+            Text("  ·  ${"%.1f".format(totalSec)}s total", color = skin.dim, fontSize = 11.sp,
+                modifier = Modifier.weight(1f, fill = false))
+            Text(if (open) "hide" else "show", color = skin.accent, fontSize = 11.sp)
+        }
+        if (open) tools.forEach { ChatRow(it, vm) }
+    }
+}
+
+/**
+ * In-chat question card: when the assistant asks (options, confirmation, or a free-text
+ * question), the card appears inline above the composer and the turn waits on it — no
+ * blocking dialog, no lost scroll position. Tapping a choice answers immediately; the text
+ * field answers free-form.
+ */
+@Composable
+private fun ClarifyCard(vm: ChatViewModel) {
+    val req = vm.clarify ?: return
+    val skin = LocalSkin.current
+    var answer by remember(req) { mutableStateOf("") }
+    Surface(
+        Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp), color = skin.surface, shadowElevation = 2.dp,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(req.question, color = skin.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            if (req.choices.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    req.choices.forEach { c ->
+                        Text(c, color = skin.accent, fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                .clickable { vm.answerClarify(c) }.padding(vertical = 6.dp))
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = answer, onValueChange = { answer = it },
+                    placeholder = { Text("Your answer", fontSize = 13.sp) }, modifier = Modifier.weight(1f))
+                TextButton(onClick = { vm.answerClarify(answer.ifBlank { "(no answer)" }) }) { Text("Answer") }
+            }
+        }
     }
 }
 

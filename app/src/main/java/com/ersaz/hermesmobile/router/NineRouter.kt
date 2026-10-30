@@ -27,6 +27,9 @@ class NineRouter(private val rt: HermesRuntime) {
     val log: StateFlow<String> = _log
     private val _message = MutableStateFlow("")
     val message: StateFlow<String> = _message
+    /** Last free-model diagnosis, in plain language (which step failed, and what was actually returned). */
+    private val _diagnosis = MutableStateFlow("")
+    val diagnosis: StateFlow<String> = _diagnosis
     /** wreq-js availability inside the router directory: unknown | available | missing | install failed. */
     private val _wreqJs = MutableStateFlow("unknown")
     val wreqJsStatus: StateFlow<String> = _wreqJs
@@ -183,7 +186,34 @@ class NineRouter(private val rt: HermesRuntime) {
             say("Fetching OpenCode Free models…")
             val catalog = a.openCodeFreeModels(cookie, s.routerKey)
             val free = catalog.models
-            if (free.isEmpty()) { fail("OpenCode Free returned no models."); return false }
+            if (free.isEmpty()) {
+                // Name the failing step honestly: dashboard login already succeeded here, so
+                // the router is up — the gap is in the catalog itself, not the connection.
+                // wreq-js is deliberately NOT blamed here: a missing wreq-js breaks INFERENCE
+                // (HTTP 502 when a free model is actually called), it does not empty the listing.
+                val namespaces = runCatching { a.modelNamespaces(s.routerKey) }.getOrDefault(emptyMap())
+                val nsText = if (namespaces.isEmpty()) "none (the /v1/models call returned nothing)"
+                    else namespaces.entries.sortedByDescending { it.value }.take(8)
+                        .joinToString(", ") { "${it.key} (${it.value})" }
+                val detail = buildString {
+                    append("OpenCode Free returned no models. ")
+                    append("Suggested-models endpoint reachable: ${catalog.liveReachable}; live entries: ${catalog.liveCount}; ")
+                    append("OpenCode-lane entries in /v1/models: ${catalog.builtinCount}. ")
+                    append("Namespaces actually present in /v1/models: $nsText. ")
+                    append("What this means: ")
+                    append(when {
+                        !catalog.liveReachable -> "the dashboard's suggested-models endpoint did not answer, and /v1/models carries no OpenCode lane — connect OpenCode Zen in the 9Router dashboard, then tap Refresh free models."
+                        catalog.liveCount == 0 -> "the suggested-models endpoint answered but listed nothing — the OpenCode free tier may be unavailable in this 9Router build, or its Zen lane is not connected in the dashboard."
+                        else -> "the endpoints answered but no model id carried the OpenCode lane marker (oc/opencode/zen/ocz) — check the dashboard's provider list for a connected OpenCode entry."
+                    })
+                    append(" Note: wreq-js status is '${_wreqJs.value}' — it affects calling a free model (a missing wreq-js gives HTTP 502), not this listing.")
+                }
+                _diagnosis.value = detail
+                fail(detail)
+                return false
+            }
+            _diagnosis.value = "OpenCode Free catalog OK: ${catalog.liveCount} live suggested-models entries, " +
+                "${catalog.builtinCount} OpenCode-lane entries from /v1/models, ${free.size} listed in total."
             rt.modelStore.replaceSource("9router", free.map {
                 ModelProfile("9Router · OpenCode Free", "9router", apiUrl, s.routerKey, it, free = true, source = "9router")
             })
@@ -201,11 +231,14 @@ class NineRouter(private val rt: HermesRuntime) {
                 rt.modelStore.select(ModelProfile("9Router · OpenCode Free", "9router", apiUrl, s.routerKey, pick, true, "9router"))
                 s.routerConfigured = true
             }
+            val quotaHit = lastErr?.let { e -> "429" in e || "quota" in e.lowercase() || "FreeUsageLimit" in e } == true
             say(
                 if (!selectAsProvider) "Catalog: ${free.size} OpenCode Free models listed; inference is not verified." + (if (catalog.live) "" else " Live catalog unavailable; showing bundled models.")
                 else if (working != null) "Ready: ${free.size} OpenCode Free models, using $working."
                 else "${free.size} OpenCode Free models listed, but none answered just now (${lastErr ?: "unknown"}). " +
-                    "The current provider was kept. OpenCode may restrict its free tier to its own app; connect a supported provider in the dashboard."
+                    (if (quotaHit) "That looks like OpenCode's own free-tier daily quota (429) — it resets on OpenCode's schedule, and installing wreq-js does not remove it. Try later, or pick another provider. "
+                     else "OpenCode may restrict its free tier to its own app; connect a supported provider in the dashboard. ") +
+                    "The current provider was kept."
             )
             return !selectAsProvider || working != null
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -214,6 +247,36 @@ class NineRouter(private val rt: HermesRuntime) {
             fail("9Router setup failed: ${e.message}")
             return false
         }
+    }
+
+    /**
+     * Read-only diagnosis for the Router screen: router up? dashboard login? suggested-models
+     * result? /v1/models namespaces? wreq-js status? Returns a short multi-line report naming
+     * exactly what was found — never a fabricated model list.
+     */
+    suspend fun diagnose(): String {
+        val a = api()
+        val up = a.isUp()
+        if (!up) return "9Router is not answering at $baseUrl. Start it first (Start button), then run Diagnose again."
+        val panel = a.loginPanel(s.routerPassword)
+        if (panel == null) return "9Router is up, but the dashboard sign-in failed. Check the dashboard password, then retry."
+        val (reachable, liveIds) = a.suggestedModels(panel.cookie)
+        val namespaces = runCatching { a.modelNamespaces(s.routerKey) }.getOrDefault(emptyMap())
+        val nsText = if (namespaces.isEmpty()) "none" else namespaces.entries.sortedByDescending { it.value }.take(8)
+            .joinToString(", ") { "${it.key} (${it.value})" }
+        val stored = rt.modelStore.all().count { it.source == "9router" }
+        return buildString {
+            appendLine("9Router is up at $baseUrl.")
+            appendLine("Dashboard sign-in: OK.")
+            appendLine("Suggested-models endpoint reachable: $reachable; entries: ${liveIds.size}.")
+            appendLine("Namespaces in /v1/models: $nsText.")
+            appendLine("wreq-js: ${_wreqJs.value} (affects calling free models — HTTP 502 when missing — not the listing).")
+            appendLine("9Router models currently stored in Hermes: $stored.")
+            appendLine(when {
+                liveIds.isNotEmpty() || stored > 0 -> "Next step: tap Refresh free models to re-list, then check the model picker with the Free filter."
+                else -> "Next step: connect OpenCode Zen in the 9Router dashboard (Dashboard button), then tap Refresh free models."
+            })
+        }.trimEnd()
     }
 
     private fun fail(msg: String) {
