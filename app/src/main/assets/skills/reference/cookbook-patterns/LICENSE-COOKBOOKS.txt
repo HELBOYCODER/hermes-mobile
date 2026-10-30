@@ -1,0 +1,26 @@
+Attribution: Claude Cookbook texts (MIT, authorship kept). Source: https://github.com/anthropics/claude-cookbooks — bundled verbatim: capabilities/retrieval_augmented_generation/README.md, patterns/agents/prompts/*.md, patterns/agents/README.md. Notebooks (.ipynb) and data/ are NOT bundled. The SKILL.md index and the three pattern guides are Hermes-written summaries, not Anthropic text.
+
+MIT License
+
+Copyright (c) 2023 Anthropic
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+MIT License
+
+Copyright (c) 2023 Anthropic
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all

@@ -47,7 +47,15 @@ done
 # Bundle the pinned server, its JS dependencies and both SQLite engines. Install
 # scripts are skipped on the host; better-sqlite3 ships the ARM64 musl prebuild.
 command -v npm >/dev/null
-npm install --global --prefix "$WORK/rootfs/usr" --ignore-scripts --no-audit --no-fund 9router@0.5.99
+npm install --global --prefix "$WORK/rootfs/usr" --ignore-scripts --no-audit --no-fund 9router@0.5.112
+# wreq-js is an optional runtime dependency that 9router's OpenCode free lane
+# resolves at runtime. Installing it into the router's own directory fixes the
+# 502 "wreq-js unavailable" error on fresh bundles (and, via the on-device
+# ensure step in NineRouter, on existing installs too).
+# Honest limit: this does NOT remove OpenCode's upstream free-tier daily
+# quota — that limit is set by the provider, not by this package.
+npm install --prefix "$WORK/rootfs/usr/lib/node_modules/9router" --ignore-scripts --no-audit --no-fund wreq-js
+test -d "$WORK/rootfs/usr/lib/node_modules/9router/node_modules/wreq-js"
 npm install --prefix "$WORK/rootfs/usr/lib/hermes-9router-runtime" --ignore-scripts --no-audit --no-fund \
   better-sqlite3@13.0.3 sql.js@1.14.1
 test -f "$WORK/rootfs/usr/lib/node_modules/9router/app/custom-server.js"

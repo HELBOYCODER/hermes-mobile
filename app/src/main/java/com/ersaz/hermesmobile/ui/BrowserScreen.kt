@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -39,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +63,8 @@ fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(700); tick++ } }
     var urlText by remember { mutableStateOf("") }
+    var snapText by remember { mutableStateOf("") }
+    var toolMsg by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(handover) { if (handover != null) focused = true }
     val tabs = remember(tick) { b.tabList }
@@ -101,6 +108,25 @@ fun BrowserScreen(rt: HermesRuntime, onExit: () -> Unit = {}) {
                 keyboardActions = KeyboardActions(onGo = { active?.let { t -> scope.launch { runCatching { b.navigate(t, urlText) } } } }),
             )
         }
+        // Playwright-style tool actions, user-facing, on Hermes' own
+        // browser host (BrowserManager/WebView — Playwright itself is a
+        // desktop Node tool and is NOT bundled). These are the same
+        // operations the agent's browser tool performs; a tap here is
+        // the user acting directly, so it needs no extra approval gate,
+        // while agent-initiated browser actions remain agent tool calls
+        // (disable the "browser" toolset to stop them). navigate/click/
+        // type/fill live in the address bar and the page itself; the
+        // buttons below expose snapshot/wait/screenshot, which the page
+        // view alone cannot show. Snapshot is a structured text outline,
+        // not a screenshot.
+        Row(Modifier.padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = { active?.let { t -> scope.launch { snapText = runCatching { b.snapshot(t) }.getOrDefault("Snapshot failed."); toolMsg = "" } } }) { Text("Snapshot") }
+            OutlinedButton(onClick = { scope.launch { delay(2000); toolMsg = "Waited 2s." } }) { Text("Wait 2s") }
+            OutlinedButton(onClick = { active?.let { t -> scope.launch { toolMsg = runCatching { "Screenshot saved: " + rt.sandbox.guestPath(b.screenshot(t)) }.getOrDefault("Screenshot failed.") } } }) { Text("Screenshot") }
+        }
+        if (toolMsg.isNotBlank()) Text(toolMsg, color = skin.label, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        if (snapText.isNotBlank()) Text(snapText, color = skin.label, fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+            modifier = Modifier.fillMaxWidth().height(200.dp).verticalScroll(rememberScrollState()).padding(horizontal = 8.dp))
         }
         val a = active
         if (a != null) {

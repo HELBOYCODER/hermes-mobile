@@ -215,8 +215,15 @@ class Agent(
                         ToolLoopDetector.Verdict.STOP -> loopStop = true
                         else -> {}
                     }
-                    listener.onToolEnd(call, capped, System.currentTimeMillis() - started)
-                    session.messages += Message("tool", capped, toolCallId = call.id, name = call.name)
+                    // Token saver (ON by default): compress this tool
+                    // result for MODEL CONTEXT only. Loop detection above
+                    // ran on the uncompressed text; files the agent writes
+                    // are never touched by TokenSaver.
+                    val codeAware = call.name in setOf("read_file", "search_files", "read", "cat")
+                    val forModel = if (runtime.settings.tokenSaver) TokenSaver.compressForContext(capped, codeAware) else capped
+                    TokenSaver.record(capped.length, forModel.length)
+                    listener.onToolEnd(call, forModel, System.currentTimeMillis() - started)
+                    session.messages += Message("tool", forModel, toolCallId = call.id, name = call.name)
                 }
                 deliverOutputs()
                 runtime.sessions.save(session)
@@ -360,6 +367,123 @@ object PromptBuilder {
 
     private const val SKILLS_GUIDANCE = "When you work out a non-trivial workflow, record it with skill_manage for future reuse."
 
+    /**
+     * Hermes-owned design routing (not Huashu's text): when the user asks
+     * for a design, the huashu-design skill (bundled by default, ON)
+     * governs the flow. The skill's own SKILL.md is kept verbatim; this
+     * note only routes to it and states this phone's delivery paths.
+     * PPTX honesty rule: the skill's editable-PPTX paths need
+     * html2pptx.js + pptxgenjs (Node) or python-pptx, neither of which
+     * is bundled or verified in the sandbox — so HTML deck first, and
+     * never claim a PPTX you did not actually produce.
+     */
+    private const val DESIGN_SKILL_ROUTING =
+        "## Design requests (huashu-design skill, bundled by default, ON)\n" +
+        "When the user asks for a design — a website, a clickable app prototype, an editable presentation, an infographic, " +
+        "a product animation, or any new visual design — load the huashu-design skill with skill_view and follow its flow " +
+        "exactly: generate 6 preview candidates first, let the user pick 3 directions, then polish the final output. " +
+        "Deliver HTML outputs into the project folder, preview them in the existing Browser screen, ZIP-export via the " +
+        "existing DownloadsExporter path, and use the Spec-first checklist for build tasks. HTML deck first: editable PPTX " +
+        "is available only if a verified converter is present (it is not bundled); never claim a PPTX you did not produce, " +
+        "and never claim MP4/GIF rendering you did not run."
+
+    /**
+     * REA mode (reverse-engineer-anything skill, bundled by default, ON).
+     * Trigger: the user says "reverse engineer this" (or drops a binary /
+     * APK / bundle into the workspace). The skill's own SKILL.md is kept
+     * verbatim; this note only routes to it and enforces its core rule.
+     * The desktop `npx rea-agents setup` is NOT used on Android — the
+     * phone equivalent is the Coding "Reverse engineering" panel
+     * (sandbox binutils/strings/readelf/objdump, APK manifest+dex
+     * strings, JS analysis) plus this prompt mode. Local-only: nothing
+     * analyzed is uploaded. Ghidra headless and Hopper are desktop-only
+     * and are never claimed to run on-phone.
+     */
+    private const val REA_MODE_ROUTING =
+        "## Reverse engineering (rea skill, bundled by default, ON)\\n" +
+        "When the user says \"reverse engineer this\" (or drops a binary, APK, Electron bundle, JS bundle, or .NET assembly " +
+        "into the workspace), switch into REA mode: load the reverse-engineer-anything skill with skill_view and follow its " +
+        "phases exactly. Core rule, never broken: EVERY finding carries its evidence (tool output, offset, string, symbol) " +
+        "AND its limitation/confidence — analysis is never presented as a guess, and unverified claims are labelled " +
+        "hypotheses. Report findings grouped behavior → strings/symbols → code structure → data, each with evidence + " +
+        "limitation + confidence, and end with an unknowns section for what could not be determined. Identify targets by " +
+        "magic bytes first, extension second. On-phone tools only (sandbox file/strings/readelf/objdump/nm, APK manifest " +
+        "and dex strings, JS analysis); full APK decompilation (apktool/jadx), Ghidra headless, and Hopper need a desktop " +
+        "run — say which step ran on-phone and which needs desktop, never blur the two, and offer the exported analysis " +
+        "package for desktop continuation. Local-only: never upload a binary, sample, or analysis output anywhere."
+
+    /**
+     * Full design flow (all ON by default, after the Huashu 6→3 step):
+     * Huashu first (6 preview candidates → user picks 3 → polish), then
+     * ui-ux-pro-max palettes/font pairs as choices, impeccable critique
+     * pass before final delivery, GSAP for HTML animation, React Bits
+     * for web prototypes only, HyperFrames HTML scenes (video only if
+     * the sandbox toolchain is verified), Blender scripts only, and
+     * Framelink Figma import. Honesty notes: the impeccable pass is
+     * instruction-level (the agent runs it before delivery; it is not
+     * a separate blocking validator process). React Bits components are
+     * never native Android components. Blender has no live phone
+     * connection. Framelink fetches are never faked.
+     */
+    private const val DESIGN_FLOW_ROUTING =
+        "## Design flow (all default skills, ON)\\n" +
+        "After the Huashu 6→3 step, for every design output: (1) PALETTES & FONTS — offer choices from the bundled " +
+        "ui-ux-pro-max skill (load it with skill_view; its data lives in the installed skill dir under data/colors.csv " +
+        "with 192 palettes and data/google-fonts.csv with font pairs): present 3 palette options and 3 font-pair options " +
+        "and let the user pick, or pick and state the choice. (2) CRITIQUE — before final delivery, run the bundled " +
+        "impeccable skill's critique/audit pass (load it with skill_view) to catch AI-design clichés (purple gradients, " +
+        "generic hero layouts, lorem ipsum, mismatched spacing) and fix what it finds; this is an instruction-level pass " +
+        "inside this run, not a separate validator. (3) ANIMATION — generated HTML animations must use GSAP (free, " +
+        "including plugins) via CDN in the HTML output, following the bundled gsap-* skills. (4) REACT BITS — for " +
+        "generated WEB prototypes only, React Bits components may be used via CDN/import in the HTML/React prototype " +
+        "with attribution; native Android UI stays Hermes' own Compose components, never React Bits. (5) VIDEO — " +
+        "HyperFrames workflow docs/templates (bundled hyperframes skills) describe HTML scene → video; HTML preview in " +
+        "the Browser screen works now, but final video rendering runs ONLY after verifying the sandbox toolchain " +
+        "(run `command -v chromium chromium-browser google-chrome ffmpeg` first) — if Chromium+ffmpeg are not present, " +
+        "list video as not available on-phone and deliver the HTML scene + export package instead. (6) BLENDER — " +
+        "no live Blender control on the phone; write Blender Python scripts (bundled blender-scripts skill) into " +
+        "chat/project files for the user to run in desktop Blender. (7) FIGMA — when the user pastes a Figma link, " +
+        "fetch its layout/style JSON with the framelink-figma MCP server's get_figma_data tool (needs the user's own " +
+        "Figma API key in Settings → Environment), or via direct Figma REST API calls with the user's key if that " +
+        "server is unavailable; generate code in Hermes' own style from the fetched data. Never fake a Figma fetch."
+
+    /**
+     * Team mode (Sno two-agent team + ECC engineering team, ON by
+     * default, ACTIVE in the agent — not an opt-in). Uses Hermes'
+     * existing delegate_task sub-agent system; no new runtime.
+     * Honest provider note: delegate_task offers model_choice
+     * (same_as_me / default_model / sub_model), NOT an arbitrary
+     * provider picker — so the reviewer runs on a DIFFERENT provider
+     * only when the user's configured default/sub models live on
+     * another provider than the builder's; otherwise it runs
+     * fresh-session on a different model of the same provider, and the
+     * agent says so. Fresh session means: the reviewer brief contains
+     * ONLY the deliverable, the original request, and the checklist —
+     * never the builder's chat history.
+     */
+    private const val TEAM_MODE_ROUTING =
+        "## Team mode (ON by default — builder + reviewer + specialists)\\n" +
+        "For every build/deliverable task, work as a team via delegate_task (wait=true at each stage) and show which " +
+        "specialist is working: (1) PLANNER — break the task into steps and acceptance criteria. (2) RESEARCHER — " +
+        "research-first: check docs and existing code BEFORE writing anything. (3) IMPLEMENTER — build it. " +
+        "(4) TESTER — run the real tests/checks (a testing skill, when loaded, triggers real test runs, not a claim). " +
+        "(5) REVIEWER — a FRESH sub-agent session whose brief contains ONLY the deliverable, the original request, and " +
+        "the checklist (never builder history); prefer a model_choice whose provider differs from the builder's when the " +
+        "user has one configured, otherwise a different model of the same provider — and say which it is. The reviewer " +
+        "either approves or lists concrete errors. (6) SECURITY AUDITOR — a security pass (a security skill, when loaded, " +
+        "triggers this pass): secrets, injection, unsafe commands, data leaks. On errors, the implementer fixes them and " +
+        "the reviewer re-checks ONCE. Only after reviewer + security approval is the deliverable presented as final. " +
+        "Non-build chat (questions, explanations) does not need the team. The user can turn Team mode off in chat; when " +
+        "off, work single-agent as before. Quota handoff is automatic (see below) and independent of Team mode.\\n" +
+        "## Quota handoff (ON by default)\\n" +
+        "If a provider call fails with a quota/rate-limit error, the app switches to the next configured provider and " +
+        "resumes from the last checkpoint instead of restarting; the user is told which provider took over. If no " +
+        "fallback provider is configured, the run stops honestly — never fake progress.\\n" +
+        "## Nightly learning (approval-gated)\\n" +
+        "A nightly job drafts proposed rules from the day's sessions into rules/proposed.json. NOTHING is adopted without " +
+        "the user's approval in the morning brief (or /rules approve). Approved rules below are active; rejected rules " +
+        "are never re-proposed."
+
     private const val ENVIRONMENT =
         "## Environment\nFor final deliverables, write files to /root/outputs and call send_file with each completed file. The app attaches changed files from that output folder automatically after tool execution. Use send_file for deliverables elsewhere. Use ordinary HTTPS or Markdown links for websites. Never claim a missing file is attached.\nYou run inside the Hermes Android app on the user's phone. Your terminal is a sandboxed Alpine Linux " +
         "(aarch64, PRoot — no root on the host, but you are root inside). Home is /root; HERMES_HOME is /root/.hermes. " +
@@ -397,6 +521,18 @@ object PromptBuilder {
                 " You are one bot in a roster of Hermes agents, each with its own memory and chat."
         }
         parts += "For coding work in ${s.codingProject}, use the hermes-spec-workflow skill and coding_workflow tool: inspect instructions and Git state, record acceptance criteria, implement focused changes, review diffs, and verify with actual test evidence. Resume persisted tasks without replaying completed side effects. Ordinary conversation needs no specification workflow."
+        if (s.specFirst) {
+            // Spec-first is ON by default (settings.specFirst): build requests
+            // first go through the bundled Spec Kit flow (constitution → spec
+            // → plan → task checklist, shown in chat), then implementation
+            // task by task. When off, this block is absent and chat is as before.
+            parts += "Spec-first is ON for this chat: when the user asks to build something, first produce or update the constitution, spec, plan and a task checklist (using the bundled Spec Kit templates and the spec workflow), show that checklist in chat, then implement task by task, marking tasks done only with test evidence. Do not skip the spec/plan/checklist step for build requests. " +
+                "LIVING SPEC.md (ThinkRail concept): at the start of every session in a project, read the project's SPEC.md first (it holds intent, decisions, and architecture notes); after each completed task, update SPEC.md with what changed and why, so intent survives across sessions. " +
+                "COMPONENTS: when the user pastes a component prompt (from uberdesigner.ai or anywhere — their own input, never a copied library), treat it as the style instruction and implement it with the design pipeline below. " +
+                "FILM: when the user says 'make a film' (or asks for a film), use the bundled lemo-film skill: pick one of its 66 styles or a saved MY-STYLES custom style, build scene-by-scene HTML/GSAP code, and render via the sandbox Chromium+ffmpeg attempt — or deliver the complete coded film package via ZIP export, naming exactly which render step needs desktop. " +
+                "SEARCH: when the xerj MCP server is connected, prefer its search tools and use its exact file:line snippets instead of reading whole files; otherwise the BM25-ranked search_files tool is the live path. " +
+                "TOKEN SAVER is ON: tool results reaching you were compressed on-device (JSON minify, comment stripping, repeated-line dedup, marked truncation); error lines and log tails are always preserved."
+        }
         Personalities.resolve(s.personality)?.let { parts += "## Personality\n$it" }
         if (s.customSystemPrompt.isNotBlank()) parts += s.customSystemPrompt.trim()
 
@@ -413,7 +549,19 @@ object PromptBuilder {
         if (s.userProfileEnabled) agent.memory.promptBlock("user")?.let { parts += it }
         if ("message_bot" in toolNames) runtime.botHub.rosterPrompt(agent)?.let { parts += it }
         if ("delegate_task" in toolNames) runtime.agentJobs.roster()?.let { parts += it }
-        if ("skill_view" in toolNames) runtime.skills.indexBlock()?.let { parts += it }
+        if ("skill_view" in toolNames) {
+            runtime.skills.indexBlock()?.let { parts += it }
+            if (runtime.skills.find("huashu-design") != null) parts += DESIGN_SKILL_ROUTING
+            if (runtime.skills.find("reverse-engineer-anything") != null) parts += REA_MODE_ROUTING
+            if (runtime.skills.find("ui-ux-pro-max") != null || runtime.skills.find("impeccable") != null) parts += DESIGN_FLOW_ROUTING
+            if (s.teamMode) parts += TEAM_MODE_ROUTING
+            // User-approved learned rules (nightly learning): active only
+            // after explicit approval; never auto-adopted (see RulesStore).
+            runCatching {
+                val approved = java.io.File(runtime.hermesHome, "rules/approved.md")
+                if (approved.isFile) approved.readText().take(4000).ifBlank { null }?.let { parts += "## Learned rules (user-approved, apply to future runs)\\n$it" }
+            }
+        }
 
         // Project context files, like Hermes loading AGENTS.md from the working directory.
         for (name in listOf("AGENTS.md", ".hermes.md")) {

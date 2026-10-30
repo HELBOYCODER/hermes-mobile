@@ -54,14 +54,88 @@ class McpManager(private val rt: HermesRuntime) {
     fun servers(): List<McpServer> = store.all()
     fun statusOf(id: String): McpStatus? = _status.value[id]
 
+    /** Hub defaults, seeded once (never resurrecting a user deletion). */
+    init { seedHubDefaults(); McpCatalog15.seed(store, rt.hermesHome) }
+
+    private fun seedHubDefaults() {
+        val marker = File(rt.hermesHome, "mcp/.hub-defaults-v1")
+        val knownBuiltin = setOf("hermes-code", "context7-docs", "github-readonly")
+        var changed = false
+        // Mark the pre-existing bundled defaults as built-in (preserving
+        // the user's enabled state); do not touch user servers.
+        store.all().forEach { s ->
+            if (s.id in knownBuiltin && !s.builtin) { store.upsert(s.copy(builtin = true)); changed = true }
+        }
+        if (!marker.exists()) {
+            if (store.get("framelink-figma") == null) {
+                // Framelink (GLips/Figma-Context-MCP, MIT): figma-developer-mcp
+                // via sandbox Node. Disabled until the user's own Figma key
+                // is entered (see the Hub's needs-key state); autoStart stays
+                // true per the bundled-server rule, but disabled entries are
+                // never auto-connected, so a keyless Framelink stays quiet.
+                store.upsert(McpServer(
+                    id = "framelink-figma", displayName = "Framelink Figma",
+                    command = "npx", args = listOf("-y", "figma-developer-mcp"),
+                    env = mapOf("FIGMA_API_KEY" to "\${FIGMA_API_KEY}"),
+                    enabled = false, builtin = true, autoStart = true,
+                    note = "Figma layout/style via figma-developer-mcp. Needs your own Figma API key: set FIGMA_API_KEY in Settings → Environment, or type the key in this server's env below. Paste a Figma link in chat and the agent fetches it with get_figma_data.",
+                ))
+                changed = true
+            }
+            marker.parentFile?.mkdirs()
+            marker.writeText("1")
+        }
+        // Xerj local search (xerj-org/xerj, Apache-2.0): `xerj mcp`
+        // as a default Hub entry, ON by default. Seeded under its own
+        // marker so a user deletion is never resurrected. Until the
+        // musl binary is installed (XerjSetup, default ON at startup)
+        // this entry honestly reports its connect error.
+        val xerjMarker = File(rt.hermesHome, "mcp/.xerj-v1")
+        if (!xerjMarker.exists() && store.get("xerj") == null) {
+            store.upsert(McpServer(
+                id = "xerj", displayName = "Xerj local search",
+                command = "xerj", args = listOf("mcp"),
+                enabled = true, builtin = true, autoStart = true,
+                note = "Local search over /root/projects (BM25 + hybrid, file:line snippets, no external service). Needs the xerj binary: sandbox setup installs the verified v1.0.0-rc.100 musl aarch64 tarball (checksum-verified); until then this entry shows its real error and search falls back to the BM25-ranked SearchFilesTool.",
+            ))
+            xerjMarker.parentFile?.mkdirs()
+            xerjMarker.writeText("1")
+            changed = true
+        }
+        if (changed) _tick.value++
+    }
+
+    /** Framelink needs-key check: no usable Figma key anywhere. */
+    fun framelinkNeedsKey(): Boolean {
+        val s = store.get("framelink-figma") ?: return false
+        val literal = s.env["FIGMA_API_KEY"].orEmpty()
+        if (literal.isNotBlank() && !literal.contains("\${")) return false
+        return rt.settings.envVars()["FIGMA_API_KEY"].isNullOrBlank()
+    }
+
     private fun setStatus(id: String, s: McpStatus) {
         _status.value = _status.value + (id to s); _tick.value++
         when (s) {
-            is McpStatus.Failed -> rt.log.e("mcp", "$id: ${s.message}")
-            is McpStatus.NeedsAuth -> rt.log.i("mcp", "$id needs sign-in: ${s.message}")
-            is McpStatus.Connected -> rt.log.i("mcp", "$id connected (${s.tools} tools)")
+            is McpStatus.Failed -> {
+                rt.log.e("mcp", "$id: ${s.message}")
+                persistLastError(id, s.message)
+            }
+            is McpStatus.NeedsAuth -> {
+                rt.log.i("mcp", "$id needs sign-in: ${s.message}")
+                persistLastError(id, s.message)
+            }
+            is McpStatus.Connected -> {
+                rt.log.i("mcp", "$id connected (${s.tools} tools)")
+                persistLastError(id, "")
+            }
             else -> {}
         }
+    }
+
+    /** Hub registry health text: persists only when it actually changes. */
+    private fun persistLastError(id: String, err: String) {
+        val s = store.get(id) ?: return
+        if (s.lastError != err) store.upsert(s.copy(lastError = err))
     }
 
     // ---------------------------------------------------------------- adding
@@ -108,11 +182,27 @@ class McpManager(private val rt: HermesRuntime) {
     fun connectAllAsync() {
         servers().forEach { s ->
             if (!s.enabled) setStatus(s.id, McpStatus.Disabled)
+            // Hub rule: custom entries stay unconnected until tested
+            // (autoStart=false); bundled entries auto-start. A skipped
+            // entry keeps no status, so the Hub shows "Not started".
+            else if (!s.autoStart) { /* not started yet — test it in the Hub */ }
             else rt.scope.launch(Dispatchers.IO) { connect(s.id, interactive = false) }
         }
     }
 
     fun reconnectAsync(id: String, interactive: Boolean = true) { rt.scope.launch(Dispatchers.IO) { connect(id, interactive) } }
+
+    /** /reload-mcp: disconnect every connection, then reconnect each
+     *  enabled server sequentially and return per-server results.
+     *  Disabled servers are reported as disabled, not reconnected. */
+    suspend fun reloadAll(): List<Pair<McpServer, McpStatus>> {
+        val ids = conns.keys.toList()
+        ids.forEach { closeConn(it) }
+        return servers().map { s ->
+            if (!s.enabled) s to McpStatus.Disabled
+            else s to connect(s.id, interactive = false)
+        }
+    }
 
     fun signInAsync(id: String) { rt.scope.launch(Dispatchers.IO) { oauth.store.clearTokens(id); connect(id, interactive = true) } }
 
@@ -195,7 +285,7 @@ class McpManager(private val rt: HermesRuntime) {
                 .put("protocolVersion", MCP_PROTOCOL_VERSION)
                 .put("capabilities", JSONObject())
                 .put("clientInfo", JSONObject().put("name", "hermes-agent-android").put("version", com.ersaz.hermesmobile.HermesRuntime.VERSION)),
-                timeoutMs = if (server.isStdio) 90_000 else 30_000)
+                timeoutMs = timeoutMs(server, if (server.isStdio) 90_000 else 30_000))
             (transport as? StreamableHttpTransport)?.protocolVersion = init.optString("protocolVersion", MCP_PROTOCOL_VERSION)
             transport.notify("notifications/initialized")
             val name = init.optJSONObject("serverInfo")?.optString("name").orEmpty().ifBlank { server.id }
@@ -215,7 +305,19 @@ class McpManager(private val rt: HermesRuntime) {
         val sb = rt.sandbox
         if (!sb.isInstalled() && !sb.ensureInstalled()) throw McpProtocolException("The Linux sandbox isn't installed yet, so local (stdio) MCP servers can't run.")
         ensureRuntime(server)
-        return StdioTransport(sb, server.command!!, server.args, server.env).also { it.start() }
+        // Bounded guest environment (see Sandbox.prootArgv: env -i + the
+        // base set + the user's Environment vars + this server's env).
+        // ${PLACEHOLDER} values resolve from Environment; a missing one
+        // fails the connect with a clear message instead of silently
+        // passing a literal "${...}" to the server.
+        val variables = rt.settings.envVars().toMutableMap()
+        if (variables["GITHUB_TOKEN"].isNullOrBlank() && rt.settings.githubToken.isNotBlank()) variables["GITHUB_TOKEN"] = rt.settings.githubToken
+        val resolvedEnv = server.env.mapValues { (k, v) ->
+            try { McpEnvironment.resolve(v, variables) }
+            catch (e: IllegalArgumentException) { throw McpProtocolException("Server '${server.id}': ${e.message} (env $k)") }
+        }
+        val cwd = server.cwd.ifBlank { "/root" }.takeIf { it.startsWith("/") } ?: "/root"
+        return StdioTransport(sb, server.command!!, server.args, resolvedEnv, cwd).also { it.start() }
     }
 
     /** Installs node / uv / python on demand so `npx …` and `uvx …` servers just work. */
@@ -257,16 +359,42 @@ class McpManager(private val rt: HermesRuntime) {
 
     // ---------------------------------------------------------------- using tools
 
+    /** Hub per-tool gating, applied on the fresh store entry (not the
+     *  connect-time snapshot, so Hub toggles take effect immediately):
+     *  denied tools are dropped; a non-empty allowlist keeps only its
+     *  members. This is the gating point ToolRegistry reads. */
+    private fun visibleDefs(): List<McpToolDef> =
+        conns.values.sortedBy { it.server.createdAt }.flatMap { c ->
+            val entry = store.get(c.server.id) ?: c.server
+            c.tools.filter { d ->
+                d.name !in entry.deniedTools && (entry.allowedTools.isEmpty() || d.name in entry.allowedTools)
+            }
+        }
+
+    fun toolDenied(serverId: String, tool: String): Boolean {
+        val entry = store.get(serverId) ?: return false
+        return tool in entry.deniedTools || (entry.allowedTools.isNotEmpty() && tool !in entry.allowedTools)
+    }
+
     /** Native per-tool entries (capped) plus the generic `mcp` tool when anything is connected. */
     fun tools(): List<Tool> {
-        val defs = conns.values.sortedBy { it.server.createdAt }.flatMap { it.tools }
+        val defs = visibleDefs()
         if (defs.isEmpty()) return emptyList()
         val used = mutableSetOf<String>()
         val native = defs.take(MAX_NATIVE_TOOLS).map { d -> McpTool(this, d, wireName(d, used)) }
         return native + McpGenericTool(this)
     }
 
-    fun allDefs(): List<McpToolDef> = conns.values.flatMap { it.tools }
+    fun allDefs(): List<McpToolDef> = visibleDefs()
+
+    /** Unfiltered defs for one server (the Hub detail screen's tool list). */
+    fun defsFor(serverId: String): List<McpToolDef> = conns[serverId]?.tools.orEmpty()
+
+    /** Last stdio/log output for a server (stderr tail, or "" for remote). */
+    fun diagnostics(id: String): String = conns[id]?.transport?.diagnostics.orEmpty()
+
+    private fun timeoutMs(server: McpServer, defaultMs: Long): Long =
+        if (server.timeoutSec > 0) server.timeoutSec * 1000L else defaultMs
     fun connectedIds(): List<String> = conns.keys.toList()
 
     suspend fun awaitReady(maxMs: Long = 10_000) {
@@ -275,6 +403,9 @@ class McpManager(private val rt: HermesRuntime) {
     }
 
     suspend fun callTool(serverId: String, tool: String, args: JSONObject, listener: ((String) -> Unit)? = null): String {
+        // Hub gating also enforced here, so the generic `mcp` tool cannot
+        // bypass a per-tool toggle by calling a denied tool directly.
+        if (toolDenied(serverId, tool)) return "Error: tool '$tool' on server '$serverId' is disabled in the MCP Hub."
         var attempt = 0
         while (true) {
             val c = conns[serverId] ?: run {
@@ -286,7 +417,7 @@ class McpManager(private val rt: HermesRuntime) {
             }
             try {
                 if (c.server.url != null) c.bearer.set(oauth.accessToken(c.server))
-                val res = c.transport.request("tools/call", JSONObject().put("name", tool).put("arguments", args), timeoutMs = 300_000)
+                val res = c.transport.request("tools/call", JSONObject().put("name", tool).put("arguments", args), timeoutMs = timeoutMs(store.get(serverId) ?: c.server, 300_000))
                 return formatResult(res)
             } catch (e: McpAuthRequired) {
                 if (attempt++ == 0 && oauth.accessToken(c.server, force = true) != null) { continue }

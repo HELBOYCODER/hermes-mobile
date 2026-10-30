@@ -27,6 +27,9 @@ class NineRouter(private val rt: HermesRuntime) {
     val log: StateFlow<String> = _log
     private val _message = MutableStateFlow("")
     val message: StateFlow<String> = _message
+    /** wreq-js availability inside the router directory: unknown | available | missing | install failed. */
+    private val _wreqJs = MutableStateFlow("unknown")
+    val wreqJsStatus: StateFlow<String> = _wreqJs
     private val lock = Mutex()
     private var proc: ProcessRegistry.Entry? = null
 
@@ -64,6 +67,9 @@ class NineRouter(private val rt: HermesRuntime) {
             fail("The bundled router could not be installed. Check free storage and retry.")
             return false
         }
+        // Existing installs get wreq-js too, not only fresh bundles: the
+        // bundled-router stamp can already be current while wreq-js is absent.
+        ensureWreqJsLocked()
         try {
             startLocked() && configureLocked(selectAsProvider)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -72,6 +78,47 @@ class NineRouter(private val rt: HermesRuntime) {
             throw e
         } catch (e: Exception) {
             fail("9Router setup failed: ${e.message}")
+            false
+        }
+    }
+
+    /** Public ensure step for the Router screen: check, then install if missing. Never fails setup by itself. */
+    suspend fun ensureWreqJs(): Boolean = lock.withLock { ensureWreqJsLocked() }
+
+    /** Check-only probe for the Router screen (no install, no state change beyond the status flow). */
+    suspend fun checkWreqJs(): String {
+        val check = rt.sandbox.exec(
+            "cd /usr/lib/node_modules/9router && node -e \"require('wreq-js')\"",
+            timeoutSec = 60, onOutput = { appendLog(it) },
+        )
+        _wreqJs.value = if (check.exitCode == 0) "available" else "missing"
+        return _wreqJs.value
+    }
+
+    /**
+     * After the bundled router is installed, make sure wreq-js resolves from
+     * the router's own directory (/usr/lib/node_modules/9router). This fixes
+     * the 502 "wreq-js unavailable" error for OpenCode's free lane.
+     * It does NOT remove OpenCode's upstream free-tier daily quota.
+     * A failed install only logs a warning; the router can still serve its
+     * other lanes, so setup is not failed on wreq-js alone.
+     */
+    private suspend fun ensureWreqJsLocked(): Boolean {
+        val check = rt.sandbox.exec(
+            "cd /usr/lib/node_modules/9router && node -e \"require('wreq-js')\"",
+            timeoutSec = 60, onOutput = { appendLog(it) },
+        )
+        if (check.exitCode == 0) { _wreqJs.value = "available"; say("wreq-js is available."); return true }
+        say("wreq-js is missing — installing it into the router directory…")
+        val install = rt.sandbox.exec(
+            "cd /usr/lib/node_modules/9router && npm install --no-audit --no-fund wreq-js",
+            timeoutSec = 600, onOutput = { appendLog(it) },
+        )
+        return if (install.exitCode == 0) {
+            _wreqJs.value = "available"; say("wreq-js installed."); true
+        } else {
+            _wreqJs.value = "install failed"
+            say("wreq-js install failed (exit ${install.exitCode}); OpenCode free lane may still report it unavailable. Other router lanes are unaffected.")
             false
         }
     }

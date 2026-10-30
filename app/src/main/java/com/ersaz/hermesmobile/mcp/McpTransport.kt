@@ -237,6 +237,8 @@ class StdioTransport(
     private val command: String,
     private val args: List<String>,
     private val env: Map<String, String>,
+    /** Guest working directory (Hub registry `cwd`, default /root). */
+    private val cwd: String = "/root",
 ) : McpTransport() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var proc: Process? = null
@@ -245,7 +247,8 @@ class StdioTransport(
 
     fun start() {
         val line = (listOf(command) + args).joinToString(" ") { Sandbox.shQuote(it) }
-        val pb = sandbox.processBuilder(listOf("/bin/sh", "-c", "cd /root; exec $line"), "/root", env)
+        val dir = cwd.takeIf { it.startsWith("/") } ?: "/root"
+        val pb = sandbox.processBuilder(listOf("/bin/sh", "-c", "cd ${Sandbox.shQuote(dir)}; exec $line"), "/root", env)
         val p = pb.start().also { proc = it }
         scope.launch {
             try {

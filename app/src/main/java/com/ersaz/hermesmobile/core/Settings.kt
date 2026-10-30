@@ -74,6 +74,36 @@ class Settings(context: Context) : NousTokenStore {
     var maxIterations by int("max_iterations", 90)
     var maxTokens by int("max_tokens", 0) // 0 = provider default
     var reasoningEffort by str("reasoning_effort", "") // "", none, low, medium, high
+    /** Agent engine: "native" (Hermes agent, default), "pi" (Pi harness in
+     *  the sandbox), or "copilot" (Microsoft Foundry remote engine — see
+     *  CopilotHarness: remote, stub until the invocation surface is
+     *  verified; selecting it falls back to native, never a fake run). */
+    var engine by str("engine", "native")
+    /** Copilot (Foundry) BYOK: the user's own Foundry/Azure project
+     *  endpoint + API key. Stored like every other provider key in this
+     *  app (SharedPreferences, unencrypted at rest — no
+     *  EncryptedSharedPreferences dependency). Blank = not configured. */
+    var foundryEndpoint by str("foundry_endpoint", "")
+    var foundryApiKey by str("foundry_api_key", "")
+    /** Task-based model routing (Copilot-harness concept, adopted into
+     *  the native engine): suggest the best already-configured model
+     *  for the task; the user's explicit ModelPicker choice always wins. */
+    var taskRouting by bool("task_routing", true)
+    /** Team mode (Sno concept, ON by default): build/deliverable tasks
+     *  run builder → reviewer (fresh session) with ECC specialist
+     *  stages; the user can turn it off per chat, but it starts ON. */
+    var teamMode by bool("team_mode", true)
+    /** Quota handoff (Sno concept, ON by default): on a quota error,
+     *  automatically switch to the next configured provider and resume
+     *  from the checkpoint instead of failing the run. */
+    var quotaFallback by bool("quota_fallback", true)
+    /** Spec-first (Spec Kit flow) in chat: on by default; off = chat behaves as before. */
+    var specFirst by bool("spec_first", true)
+    /** Suggested replies above the composer (ON by default). */
+    var suggestedReplies by bool("suggested_replies", true)
+    /** Token saver (Headroom concept, Hermes code): compress tool
+     * results before they reach the model. ON by default. */
+    var tokenSaver by bool("token_saver", true)
     var showReasoning by bool("show_reasoning", true)
     var compressionThreshold by int("compression_threshold_pct", 50)
     var subAgentsEnabled by bool("sub_agents_enabled", true)

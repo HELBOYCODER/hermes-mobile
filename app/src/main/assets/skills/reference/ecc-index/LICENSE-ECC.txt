@@ -1,0 +1,12 @@
+Attribution: ECC skill index (MIT). Source: https://github.com/affaan-m/ECC — this SKILL.md is a Hermes-written index (names + short descriptions + fetch paths). No ECC skill text is bundled; full texts are fetched on demand by the user. Hermes' team-role prompts are Hermes' own wording.
+
+MIT License
+
+Copyright (c) 2026 Affaan Mustafa
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:

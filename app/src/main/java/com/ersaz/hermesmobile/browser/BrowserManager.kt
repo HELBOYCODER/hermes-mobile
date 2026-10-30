@@ -155,6 +155,23 @@ class BrowserManager(private val rt: HermesRuntime) {
         return u
     }
 
+    /**
+     * Preview a single local HTML document in the existing Browser screen.
+     * No new backend is added: the document is loaded into a normal tab
+     * (loadDataWithBaseURL). Limit, stated in the UI: linked local assets
+     * are not served, so a multi-file site previews as its single document
+     * only — use the ZIP export for the full project.
+     */
+    suspend fun previewHtml(html: String): BrowserTab {
+        val t = newTab(null)
+        withContext(Dispatchers.Main) {
+            t.pageFinished = CompletableDeferred()
+            t.web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+        }
+        settle(t)
+        return t
+    }
+
     suspend fun navigate(t: BrowserTab, url: String, timeoutMs: Long = 30_000): String {
         val u = checkUrl(url)
         withContext(Dispatchers.Main) { t.pageFinished = CompletableDeferred(); t.web.loadUrl(u) }

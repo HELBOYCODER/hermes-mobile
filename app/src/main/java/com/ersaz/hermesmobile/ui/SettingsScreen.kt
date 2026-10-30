@@ -83,7 +83,7 @@ fun SettingsScreen(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
     val category = SettingsCategory.entries.firstOrNull { it.name == selected }
     BackHandler(category != null) { selected = null }
     if (category == null) {
-        SettingsHub(onSelect = { selected = it.name }, onNavigate = onNavigate)
+        SettingsHub(rt, onSelect = { selected = it.name }, onNavigate = onNavigate)
         return
     }
     androidx.compose.runtime.key(category) {
@@ -244,28 +244,48 @@ fun SettingsScreen(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
 
         }
 
+        if (category == SettingsCategory.Engine) {
+        SectionTitle("Agent engine")
+        Hint("Hermes native is the built-in agent (default). Pi harness runs the pi-coding-agent CLI inside the existing Alpine sandbox in print mode, with Hermes thinking levels mapped to Pi --thinking. If Pi cannot be installed or run, the app shows 'Pi harness not installed' and falls back to native — a Pi run is never faked. Pi uses Pi's own provider configuration; a DeepSeek model selected in Hermes works in Pi mode only if Pi itself is configured for that provider. Hermes' per-tool approval gate does not intercept Pi-internal tool calls: a Pi run starts only when you press its button. Copilot (Foundry) is a REMOTE engine (Microsoft's managed harness, public preview — it does not run locally in this app). On Foundry the harness is chosen at agent creation and cannot be switched later. This build's Foundry call is a stub (invocation surface unverified from official docs): it sends nothing, and selecting Copilot falls back to native.")
+        Picker("Engine", listOf("native" to "Hermes native (default)", "pi" to "Pi harness", "copilot" to "Copilot (Foundry, remote)"), s.engine) { s.engine = it; refresh++ }
+        if (s.engine == "copilot") {
+            Field("Foundry project endpoint (your own, BYOK)", s.foundryEndpoint) { s.foundryEndpoint = it.trim(); refresh++ }
+            Field("Foundry API key (your own, BYOK)", s.foundryApiKey, secret = true) { s.foundryApiKey = it.trim(); refresh++ }
+            var copilotStatus by remember { mutableStateOf("") }
+            OutlinedButton(onClick = { copilotStatus = com.ersaz.hermesmobile.agent.CopilotHarness.status(rt).message }) { Text("Check Copilot status") }
+            if (copilotStatus.isNotBlank()) Text(copilotStatus, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 6.dp))
+            Text(com.ersaz.hermesmobile.agent.CopilotHarness.BILLING_NOTE, color = skin.dim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+        Toggle("Task-based model routing (native engine)", s.taskRouting, "When on, the chat composer suggests the best already-configured model for the task (code tasks prefer coder/DeepSeek models when one is configured). Your explicit model choice always wins — the suggestion is a tap-to-use chip, never a silent switch. No suggestion appears when no model matches.") { s.taskRouting = it; refresh++ }
+        var piStatus by remember { mutableStateOf("") }
+        var piBusy by remember { mutableStateOf(false) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = !piBusy, onClick = {
+                piBusy = true
+                scope.launch {
+                    piStatus = try { com.ersaz.hermesmobile.agent.PiRunner(rt).status() } catch (e: Exception) { "error: ${e.message}" }
+                    piBusy = false
+                }
+            }) { Text("Check Pi status") }
+            OutlinedButton(enabled = !piBusy, onClick = {
+                piBusy = true
+                scope.launch {
+                    piStatus = try {
+                        if (com.ersaz.hermesmobile.agent.PiRunner(rt).ensureInstalled()) "Pi harness installed." else "Pi harness not installed — falling back to native."
+                    } catch (e: Exception) { "Pi install failed: ${e.message}" }
+                    piBusy = false
+                }
+            }) { Text("Install Pi harness") }
+        }
+        if (piStatus.isNotBlank()) Text(piStatus, color = skin.label, fontSize = 12.5.sp, modifier = Modifier.padding(top = 6.dp))
+        Toggle("Spec-first in chat (default on)", s.specFirst, "When on, build requests first go through constitution → spec → plan → task checklist, then implementation. When off, chat behaves as before.") { s.specFirst = it; refresh++ }
+        }
+
         if (category == SettingsCategory.Models) {
         SectionTitle("🤖 Model provider")
-        Hint("Any OpenAI-compatible endpoint works. Sign in to Nous Portal (free models included) or paste an API key for OpenRouter, OpenAI and others; local servers (Ollama, LM Studio) on your LAN work too.")
-        Picker("Provider", Providers.all.map { it.id to it.label }, s.provider) { id ->
-            val p = Providers.byId(id)
-            s.provider = id
-            // A signed-in Nous account keeps the route/model picked at login.
-            if (!(id == "nous" && rt.nousAuth.signedIn)) {
-                if (p.baseUrl.isNotBlank()) s.baseUrl = p.baseUrl
-                if (p.defaultModel.isNotBlank()) s.model = p.defaultModel
-            }
-            refresh++
-        }
-        key(refresh) {
-            val nousLogin = s.provider == "nous"
-            if (nousLogin) NousLoginCard(rt)
-            if (!nousLogin) {
-                Field("Base URL", s.baseUrl) { s.baseUrl = it.trim() }
-                Field("API key (${Providers.byId(s.provider).keyHint})", s.apiKey, secret = true) { s.apiKey = it.trim() }
-            } else Hint("Hermes connects through Nous Portal account login and returns to this app after approval.")
-            Field("Model", s.model) { s.model = it.trim() }
-        }
+        Hint("Full provider catalog: tap a provider and its official backend URL fills in automatically. Sign in (Nous, OpenRouter) or save your own key; models then load into the ModelPicker automatically, free first. The Nous and Z.ai login cards now live inside the selected entry below.")
+        ProviderCatalogPanel(rt) { refresh++ }
+        Field("Model", s.model) { s.model = it.trim() }
         var pickModel by remember { mutableStateOf(false) }
         OutlinedButton(onClick = { pickModel = true }) { Text("Browse models (free ones marked)") }
         if (pickModel) ModelPickerDialog(rt, s.model, onPick = { rt.useModel(it); pickModel = false; refresh++ }, onDismiss = { pickModel = false })
@@ -328,6 +348,8 @@ fun SettingsScreen(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
         Picker("Text size", listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Extra large"), s.fontScale) { s.fontScale = it; refresh++ }
         Picker("When I send while Hermes is working", listOf("interrupt" to "Interrupt and answer me now", "queue" to "Queue it for after the current task"), s.busyMode) { s.busyMode = it; refresh++ }
         Field("Voice input language (BCP-47, e.g. fa-IR, en-US; blank = device)", s.voiceLang) { s.voiceLang = it.trim() }
+        Toggle("Suggested replies", s.suggestedReplies, "Show up to 3 ready-made reply chips above the composer after the agent's last message. Tapping one fills the composer — it never sends by itself.") { s.suggestedReplies = it; refresh++ }
+        Toggle("Token saver", s.tokenSaver, "ON by default: compress tool outputs, logs, files and search chunks on-device before they reach the model (JSON minify, comment stripping, repeated-line dedup, marked truncation). Never drops error lines or log tails; never touches files the agent writes. Per-run savings are shown in chat.") { s.tokenSaver = it; refresh++ }
 
         }
 

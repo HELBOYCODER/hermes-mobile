@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -199,6 +200,8 @@ fun ChatScreen(vm: ChatViewModel, onOpenBrowser: () -> Unit = {}, onOpenTerminal
                 IconButton(onClick = { vm.queued.clear() }) { Icon(Icons.Default.Close, "clear queue", tint = skin.dim) }
             }
         }
+        SuggestedRepliesRow(vm)
+        HarnessControls(vm)
         Composer(vm, onImage = { imagePicker.launch("image/*") }, onFile = { filePicker.launch(arrayOf("*/*")) }, onMic = onMic)
     }
 
@@ -349,6 +352,96 @@ private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
 
 /** One floating pill, no outline: [attachments] / text / [+ · language · … · mic · send]. */
 @Composable
+/**
+ * Harness concepts adopted into Hermes' own native engine (real, not
+ * labels): (1) run info per run — engine, model, thinking, spec-first,
+ * task routing, enabled toolsets, approval note; (2) task-based model
+ * routing — a tap-to-use suggestion chip from already-configured
+ * models, never a silent switch; (3) checkpoint/resume — progress is
+ * persisted after each completed assistant turn, and a fresh session
+ * offers "Resume interrupted run", which fills the composer with the
+ * checkpoint summary (user presses send). Resume is summary-based:
+ * it does not replay tool calls or restore hidden agent state.
+ * Copilot (Foundry) selected here still runs native: see
+ * CopilotHarness (remote stub, sends nothing).
+ */
+@Composable
+private fun HarnessControls(vm: ChatViewModel) {
+    val skin = LocalSkin.current
+    val rt = vm.runtime
+    val s = rt.settings
+    // Persist a progress checkpoint after each completed assistant turn.
+    androidx.compose.runtime.LaunchedEffect(vm.items.size, vm.busy) {
+        if (vm.busy) return@LaunchedEffect
+        val last = vm.items.lastOrNull() as? ChatItem.Assistant ?: return@LaunchedEffect
+        if (last.text.isBlank()) return@LaunchedEffect
+        val lastUser = vm.items.filterIsInstance<ChatItem.User>().lastOrNull()?.text.orEmpty()
+        com.ersaz.hermesmobile.agent.RunCheckpoint.save(rt, vm.sessionTitle.ifBlank { "chat" }, vm.items.size, lastUser, last.text)
+    }
+    var showDetails by androidx.compose.runtime.remember { mutableStateOf(false) }
+    Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Run: ${s.engine} · ${s.provider} · ${s.model.ifBlank { "no model" }} · thinking ${s.reasoningEffort.ifBlank { "default" }}",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = { showDetails = !showDetails }) { Text(if (showDetails) "Hide" else "Run info") }
+        }
+        if (s.engine == "copilot") Text("Copilot (Foundry) is a remote stub in this build — nothing is sent to Foundry; this chat runs the native engine.",
+            color = skin.dim, fontSize = 11.sp)
+        if (showDetails) {
+            Text("Instructions/context: native Hermes agent prompt + Spec-first ${if (s.specFirst) "ON" else "OFF"} + task routing ${if (s.taskRouting) "ON" else "OFF"}. " +
+                "Sandbox execution: Alpine sandbox on this phone. Approval gates: dangerous commands ask first (existing approval flow); MCP calls are gated by toolset + per-tool toggles, not a separate per-call dialog. " +
+                "Enabled toolsets: ${rt.tools.toolsets.count { it.name !in s.disabledToolsetSet() }} of ${rt.tools.toolsets.size}.",
+                color = skin.dim, fontSize = 11.sp)
+        }
+        // Task-based routing suggestion (user override wins).
+        if (s.taskRouting && !vm.busy && vm.input.isNotBlank()) {
+            val store = rt.modelStore
+            val suggestion = androidx.compose.runtime.remember(vm.input) {
+                com.ersaz.hermesmobile.agent.TaskRouter.suggest(vm.input, store.all())
+            }
+            if (suggestion != null && !store.isActive(suggestion)) {
+                FilterChip(selected = false, onClick = { store.select(suggestion); vm.modelChanged() },
+                    label = { Text("Suggested model: ${suggestion.model} — use it") })
+            }
+        }
+        // Team mode toggle (ON by default): builder → reviewer + specialists.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilterChip(selected = s.teamMode, onClick = { s.teamMode = !s.teamMode },
+                label = { Text("Team mode") })
+            Text("  Builder → reviewer (fresh session) + planner, researcher, implementer, tester, security. Turn off for single-agent chat.",
+                color = skin.dim, fontSize = 11.sp, modifier = Modifier.weight(1f))
+        }
+        // Morning brief: nightly-learning proposals with Approve/Reject
+        // buttons per rule. Nothing here is auto-adopted.
+        var rulesRev by androidx.compose.runtime.remember { mutableStateOf(0) }
+        @Suppress("UNUSED_VARIABLE") val rulesTick = rulesRev
+        val rulesStore = androidx.compose.runtime.remember(rulesRev) { com.ersaz.hermesmobile.agent.RulesStore(rt) }
+        val proposals = androidx.compose.runtime.remember(rulesRev) { rulesStore.proposals() }
+        if (proposals.isNotEmpty()) {
+            Text("Morning brief — proposed rules (approve to activate, reject to discard forever):", color = skin.title, fontSize = 12.sp)
+            proposals.forEachIndexed { i, p ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Text("${i + 1}. ${p.rule}", color = skin.text, fontSize = 12.5.sp)
+                    Text("Why: ${p.reason}", color = skin.dim, fontSize = 11.sp)
+                    Row {
+                        TextButton(onClick = { rulesStore.approve(i + 1); rulesRev++ }) { Text("Approve") }
+                        TextButton(onClick = { rulesStore.reject(i + 1); rulesRev++ }) { Text("Reject") }
+                    }
+                }
+            }
+        }
+        // Resume, only for a fresh session with a saved checkpoint.
+        if (vm.items.isEmpty()) {
+            val checkpoint = androidx.compose.runtime.remember { com.ersaz.hermesmobile.agent.RunCheckpoint.load(rt) }
+            if (checkpoint != null) {
+                TextButton(onClick = { vm.input = com.ersaz.hermesmobile.agent.RunCheckpoint.resumePrompt(checkpoint) }) {
+                    Text("Resume interrupted run (${checkpoint.turns} turns, summary-based — does not replay tool calls)")
+                }
+            }
+        }
+    }
+}
+
 private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit, onMic: () -> Unit) {
     val skin = LocalSkin.current
     var menu by remember { mutableStateOf(false) }
@@ -370,6 +463,16 @@ private fun Composer(vm: ChatViewModel, onImage: () -> Unit, onFile: () -> Unit,
                         FileChip(f) { vm.pendingFiles.removeAt(i) }
                     }
                 }
+            }
+            // Spec-first toggle, ON by default (settings.specFirst): when on,
+            // build requests go through constitution → spec → plan → task
+            // checklist before implementation (see PromptBuilder); when off,
+            // chat behaves as before. Same checklist is shown in Coding.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                var specOn by remember { mutableStateOf(vm.runtime.settings.specFirst) }
+                FilterChip(selected = specOn, onClick = { specOn = !specOn; vm.runtime.settings.specFirst = specOn },
+                    label = { Text("Spec first") })
+                Text("  Engine: ${vm.runtime.settings.engine}", color = skin.dim, fontSize = 11.sp)
             }
             BasicTextField(
                 value = vm.input,

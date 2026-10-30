@@ -23,6 +23,9 @@ object Providers {
     val all = listOf(
         Provider("nous", "Nous Portal (sign in — free models included)", "https://inference-api.nousresearch.com/v1", "Hermes-4-405B", "account login only"),
         Provider("openrouter", "OpenRouter (200+ models)", "https://openrouter.ai/api/v1", "nousresearch/hermes-4-405b", "sk-or-…"),
+        // Preset only fills the backend URL. The user enters their own z.ai
+        // API key; there is no z.ai login/OAuth flow and no affiliation claim.
+        Provider("zai", "Z.ai (own API key)", "https://api.z.ai/api/paas/v4", "glm-4.5", "key"),
         Provider("openai", "OpenAI", "https://api.openai.com/v1", "gpt-4.1", "sk-…"),
         Provider("anthropic", "Anthropic (OpenAI-compatible)", "https://api.anthropic.com/v1", "claude-sonnet-4-5", "sk-ant-…"),
         Provider("gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash", "AIza…"),
@@ -99,6 +102,7 @@ class LlmClient(
     private suspend fun doChat(
         apiKey: String, model: String, messages: List<Message>, tools: JSONArray?, stream: Boolean,
         maxTokens: Int, reasoningEffort: String, sink: StreamSink?, temperature: Double?,
+        retriedWithoutThinking: Boolean = false,
     ): LlmResponse {
         if (baseUrl.isBlank()) throw LlmException("No API endpoint configured — open Settings and pick a provider.")
         val body = JSONObject()
@@ -109,7 +113,15 @@ class LlmClient(
         if (tools != null && tools.length() > 0) body.put("tools", tools).put("tool_choice", "auto")
         if (maxTokens > 0) body.put("max_tokens", maxTokens)
         temperature?.let { body.put("temperature", it) }
-        if (reasoningEffort.isNotBlank() && reasoningEffort != "none") {
+        // DeepSeek is a provider, not a harness: its thinking models accept
+        // only low/high/max, sent with thinking enabled. Other providers
+        // keep the existing reasoning_effort / OpenRouter reasoning shape.
+        val deepSeekThinking = if (provider == "deepseek")
+            com.ersaz.hermesmobile.agent.PiHarness.mapDeepSeekThinking(reasoningEffort) else null
+        if (provider == "deepseek") {
+            if (deepSeekThinking != null) body.put("thinking",
+                JSONObject().put("type", "enabled").put("effort", deepSeekThinking))
+        } else if (reasoningEffort.isNotBlank() && reasoningEffort != "none") {
             if (provider == "openrouter") body.put("reasoning", JSONObject().put("effort", reasoningEffort))
             else body.put("reasoning_effort", reasoningEffort)
         }
@@ -146,6 +158,12 @@ class LlmClient(
                 val err = resp.body?.string().orEmpty().take(1500)
                 val code = resp.code
                 val msg = runCatching { JSONObject(err).optJSONObject("error")?.optString("message") }.getOrNull() ?: err
+                // DeepSeek: a model that rejects the thinking field is retried
+                // exactly once without it, rather than failing the turn.
+                if (provider == "deepseek" && code == 400 && !retriedWithoutThinking &&
+                    com.ersaz.hermesmobile.agent.PiHarness.mapDeepSeekThinking(reasoningEffort) != null) {
+                    return doChat(apiKey, model, messages, tools, stream, maxTokens, "", sink, temperature, true)
+                }
                 throw LlmException("HTTP $code from provider: $msg", code, code == 429 || code >= 500)
             }
             val ctype = resp.header("Content-Type").orEmpty()

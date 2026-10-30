@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit) {
+fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit, onNavigate: (String) -> Unit = {}) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     var feature by remember { mutableStateOf("001-feature") }
@@ -83,6 +83,86 @@ fun CodingPanels(rt: HermesRuntime, vm: ChatViewModel, onChat: () -> Unit) {
         }) { Text("Review / restore ${id.take(8)}") }
     }
     if (checkpoints.isEmpty()) Text("No checkpoints yet", color = skin.dim)
+    // Web preview & export (existing Browser screen + DownloadsExporter;
+    // no new backend). Preview renders the single index.html document;
+    // linked local assets are not served.
+    SectionTitle("Web preview & export")
+    var exportMsg by remember { mutableStateOf("") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TextButton(enabled = !busy, onClick = {
+            busy = true
+            scope.launch {
+                try {
+                    val root = withContext(Dispatchers.IO) { projectRoot(rt) }
+                    val index = java.io.File(root, "index.html")
+                    if (!index.isFile) { message = "No index.html in this project yet." }
+                    else {
+                        val html = withContext(Dispatchers.IO) { index.readText() }
+                        rt.browser.previewHtml(html)
+                        onNavigate("Browser")
+                    }
+                } catch (e: Exception) { message = e.message ?: "Preview unavailable" }
+                finally { busy = false }
+            }
+        }) { Text("Preview index.html") }
+        TextButton(enabled = !busy, onClick = {
+            busy = true
+            scope.launch {
+                exportMsg = try {
+                    val root = withContext(Dispatchers.IO) { projectRoot(rt) }
+                    val zip = withContext(Dispatchers.IO) {
+                        val tmp = java.io.File(ctx.cacheDir, "${root.name}.zip")
+                        java.util.zip.ZipOutputStream(tmp.outputStream().buffered()).use { z ->
+                            root.walkTopDown().filter { it.isFile && ".git" !in it.relativeTo(root).invariantSeparatorsPath.split('/') }.forEach { f ->
+                                z.putNextEntry(java.util.zip.ZipEntry(f.relativeTo(root).invariantSeparatorsPath))
+                                f.inputStream().use { it.copyTo(z) }
+                                z.closeEntry()
+                            }
+                        }
+                        tmp
+                    }
+                    val uri = com.ersaz.hermesmobile.files.DownloadsExporter.save(ctx, zip)
+                    "Exported ${root.name}.zip to Downloads/Hermes ($uri)."
+                } catch (e: Exception) { "Export failed: ${e.message}" }
+                busy = false
+            }
+        }) { Text("Export project ZIP") }
+    }
+    if (exportMsg.isNotBlank()) Text(exportMsg, color = skin.dim)
+    // Pi harness (explicit user press = the approval for that run; see PiHarness).
+    SectionTitle("Pi harness")
+    var piTask by remember { mutableStateOf("") }
+    var piOut by remember { mutableStateOf("") }
+    var piStatus by remember { mutableStateOf("") }
+    OutlinedTextField(piTask, { piTask = it }, label = { Text("Task for Pi (project folder)") }, singleLine = false, modifier = Modifier.fillMaxWidth())
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TextButton(enabled = !busy, onClick = {
+            busy = true
+            scope.launch {
+                piStatus = try { com.ersaz.hermesmobile.agent.PiRunner(rt).status() } catch (e: Exception) { "error: ${e.message}" }
+                busy = false
+            }
+        }) { Text("Check Pi") }
+        TextButton(enabled = !busy && piTask.isNotBlank(), onClick = {
+            busy = true
+            scope.launch {
+                try {
+                    val root = withContext(Dispatchers.IO) { projectRoot(rt) }
+                    val thinking = com.ersaz.hermesmobile.agent.PiHarness.mapThinking(rt.settings.reasoningEffort)
+                    // DeepSeek (or any) model selected in Hermes is passed
+                    // through to Pi; Pi must itself be configured for that
+                    // provider, otherwise the run fails honestly (see above).
+                    val out = com.ersaz.hermesmobile.agent.PiRunner(rt).runPrint(piTask, rt.sandbox.guestPath(root.absolutePath), rt.settings.model, thinking)
+                    piOut = out ?: "Pi harness not installed — falling back to native Hermes. Install it in Settings → Agent engine, or send this task in chat (native engine)."
+                    if (out == null) { vm.input = piTask; onChat() }
+                } catch (e: Exception) { piOut = "Pi run failed: ${e.message}. Falling back to native Hermes." }
+                finally { busy = false }
+            }
+        }) { Text("Run with Pi") }
+    }
+    if (piStatus.isNotBlank()) Text(piStatus, color = skin.dim)
+    if (piOut.isNotBlank()) Text(piOut.take(3000), color = skin.dim)
     if (message.isNotBlank()) Text(message, color = skin.warn)
     restore?.let { id ->
         AlertDialog(onDismissRequest = { restore = null }, title = { Text("Restore this checkpoint?") },

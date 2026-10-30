@@ -15,7 +15,7 @@ import org.json.JSONObject
 class BrowserTool : Tool(
     "browser", "browser",
     "Control a real web browser (Chrome engine) with a few tabs. Workflow: open/navigate → snapshot (numbers every interactive element and shows page text) → " +
-        "click/type/select/press by ref number → snapshot again (refs change after the page changes). Also: text (full page text), eval (run JavaScript), " +
+        "click/type/fill/select/press by ref number → snapshot again (refs change after the page changes). fill is type with clear=true. Also: text (full page text), eval (run JavaScript), " +
         "screenshot (saves a JPEG; look at it with vision_analyze), scroll, back/forward/reload, wait, tabs/new_tab/switch_tab/close_tab, " +
         "cookies (names + a file with the Cookie header for curl in the shell — values never shown), set_cookie. If a page needs a login, CAPTCHA or 2-factor, " +
         "call handover: the browser opens for the user and the call returns when they tap Done; then continue with a fresh snapshot. " +
@@ -23,7 +23,7 @@ class BrowserTool : Tool(
     "🌐",
 ) {
     override val parameters = obj(
-        "action" to str("What to do", listOf("open", "navigate", "snapshot", "click", "type", "select", "press", "scroll", "text", "eval", "screenshot",
+        "action" to str("What to do", listOf("open", "navigate", "snapshot", "click", "type", "fill", "select", "press", "scroll", "text", "eval", "screenshot",
             "back", "forward", "reload", "wait", "tabs", "new_tab", "switch_tab", "close_tab", "cookies", "set_cookie", "handover")),
         "url" to str("URL for open/navigate/new_tab"),
         "ref" to int("Element ref number from the latest snapshot (click/type/select)"),
@@ -65,6 +65,8 @@ class BrowserTool : Tool(
                         "text" -> b.text(t, 20_000)
                         "click" -> b.click(t, args.optInt("ref", -1).also { if (it < 0) return fail("ref is required") }).let { it + "\n" + b.snapshot(t, 3500) }
                         "type" -> b.type(t, args.optInt("ref", -1).also { if (it < 0) return fail("ref is required") }, args.optString("text"), args.optBoolean("submit", false), args.optBoolean("clear", true))
+                        // Playwright-style "fill": same as type, but always clears the field first.
+                        "fill" -> b.type(t, args.optInt("ref", -1).also { if (it < 0) return fail("ref is required") }, args.optString("text"), args.optBoolean("submit", false), true)
                         "select" -> b.select(t, args.optInt("ref", -1), args.optString("value"))
                         "press" -> b.pressKey(t, args.optString("key").ifBlank { "Enter" })
                         "scroll" -> b.scroll(t, args.optString("direction", "down"), args.optInt("amount", 800))
