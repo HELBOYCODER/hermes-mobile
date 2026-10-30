@@ -24,6 +24,7 @@ class ScreenStartupTest {
     @get:Rule val compose = createComposeRule()
     @Test fun settingsHubOpens() {
         val application = ApplicationProvider.getApplicationContext<Application>()
+        application.applicationInfo.nativeLibraryDir = application.filesDir.absolutePath
         val rt = HermesRuntime(application)
         compose.setContent { HermesTheme(Skins.all.first()) { SettingsHub(rt, {}, {}) } }
         compose.onNodeWithText("Make Hermes yours").assertIsDisplayed()
