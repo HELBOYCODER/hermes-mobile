@@ -351,7 +351,6 @@ private fun SandboxMiniPreview(vm: ChatViewModel, onOpenTerminal: () -> Unit) {
 // ------------------------------------------------------------------ composer
 
 /** One floating pill, no outline: [attachments] / text / [+ · language · … · mic · send]. */
-@Composable
 /**
  * Harness concepts adopted into Hermes' own native engine (real, not
  * labels): (1) run info per run — engine, model, thinking, spec-first,

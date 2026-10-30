@@ -2,6 +2,8 @@ package com.ersaz.hermesmobile.ui
 
 import androidx.compose.runtime.*
 import com.ersaz.hermesmobile.HermesRuntime
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Extension
 
 /** Phone equivalent of each desktop agent tool, in one line. Desktop GUI
  *  automation has no phone equivalent and is deliberately absent: the
@@ -43,7 +45,7 @@ fun ToolsPanel(rt: HermesRuntime, onNavigate: (String) -> Unit = {}) {
     SectionTitle("Tools on this phone")
     Hint("These are the phone equivalents of the desktop Hermes agent's tools. Switch a toolset off and the agent will not use it; the same toggles live in Settings → Tools. Code runs in the Alpine sandbox, files live in the sandbox filesystem, and the browser is the in-app browser — nothing here automates a desktop GUI, and there is no image/video generation tool in this app.")
     val disabled = rt.settings.disabledToolsetSet()
-    SettingsHubRow("Open MCP Hub", "Add, test, enable and inspect MCP servers (built-in and custom)", androidx.compose.material.icons.Icons.Filled.Extension) { onNavigate("Mcp") }
+    SettingsHubRow("Open MCP Hub", "Add, test, enable and inspect MCP servers (built-in and custom)", Icons.Filled.Extension) { onNavigate("Mcp") }
     rt.tools.toolsets.forEach { t ->
         val note = phoneNote(t.name)
         val hint = if (note.isBlank()) t.description else "${t.description}. $note"

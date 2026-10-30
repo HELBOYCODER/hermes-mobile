@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
@@ -60,6 +61,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import com.ersaz.hermesmobile.ui.PromptSchoolScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,7 +111,7 @@ enum class Dest(val title: String, val icon: ImageVector) {
     Cron("Scheduled tasks", Icons.Default.Schedule),
     Browser("Browser", Icons.Default.Public),
     SubAgents("Sub-agents", Icons.Default.AccountTree),
-    Mcp("MCP Hub", Icons.Default.Extension),
+    Mcp("MCP Hub", Icons.Filled.Extension),
     Gateway("Messaging gateway", Icons.Default.Hub),
     Router("9Router", Icons.Default.Hub),
     WebUi("Remote WebUI", Icons.Default.Language),
@@ -117,7 +119,7 @@ enum class Dest(val title: String, val icon: ImageVector) {
     Usage("Usage stats", Icons.Default.BarChart),
     Logs("Logs", Icons.Default.BugReport),
     Settings("Settings", Icons.Default.Settings),
-    Learn("Prompt school", Icons.Default.School),
+    Learn("Prompt school", Icons.Filled.School),
 }
 
 class MainActivity : ComponentActivity() {
